@@ -1,0 +1,2 @@
+# set the line ending for python scripts
+*.py text eol=lf

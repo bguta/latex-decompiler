@@ -1,0 +1,4 @@
+im2latex-dataset
+src/data
+*.lst
+*.pyc

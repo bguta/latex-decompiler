@@ -1,0 +1,35 @@
+﻿\Delta(X - Y) = \delta(x - y) (\theta - \theta')
+\frac{2^{17} % \cdot5^{} \cdot7^{} \cdot11^{} \cdot13^{} \cdot23^{} \cdot83^{}\sqrt{3}}{3^{18}}
+\beta_{_\pm}^{\,\rho}=\sqrt{U-T}\, \ell_{_\pm}^{\,\rho}\ ,\eqno(17)
+\eqalignno{ T^0(M,k \vert {\rm graviton} ; N,k)\  &= \-C_0 \ \vev{ {\cal W}_{\langle M,k \vert}^{(-1/2)}(z_1,\bar{z}_1){\cal W}_{\vert {\rm grav} \rangle}^{(-1)}(z,\bar{z}){\cal W}_{\vert N,k \rangle}^{(-1/2)}(z_2,\bar{z}_2) } \cr& = \ - \chi_{-1/2} \ C_0 \ \langle M,k \vert{\cal W}_{\vert {\rm grav} \rangle}^{(-1)}(1) \vert N,k \rangle \ .&\nameali{vmandvnone} \cr }
+, which is accompanying the standard kinetic terms of the N=2 vector multiplet in the well-known component form (B.8) of eq.~(4.11). Together with the FI-term in eq.~(3.8), this now implies a non-vanishing vacuum expectation value
+\hbox{det}\overrightarrow{\Lambda}{}^{(0)}_{ab}
+\cJ=\alpha_R^{-1}\partial\alpha_R+ \alpha_R^{-1}K \alpha_R
+exp\left( -\frac{\partial}{\partial \alpha_{j}}\theta^{jk}\frac{\partial}{\partial \alpha_{k}} \right)
+BRST operator is in fact a BRST operator for the
+S_{{\rm bndy}} = {1+c\over 2 \alpha'} u X_0^2 + {u\over 2 }\sum_{n=1}^{\infty}  [ (1+c ~ a^{2n})  X_{-n} X_{n} \hspace{4cm}
+P^0_k=\{\la_j^{(k)} \vert 0\leq j\leq k\}
+for different conventionallyusedwave-functions.% to get some feel for the behaviour of
+(G_{2T-1,2k+1})_{k \in \{-1,\ldots p-1\}}\bigr\}
+T^{\mu\nu}=(2/\sqrt{g})\delta S_m/\delta g_{\mu\nu}
+G_a (q^i, {\hbar\over i} {\partial\over\partial q^i})\ \psi(q^i)\ =\ 0.\eqno(2)
+\eqalign{Z&\buildrel N\rightarrow \infty \over \longrightarrow 0\ \({2r^2 \over N^2}<1)\cr&\buildrel N\rightarrow \infty \over \longrightarrow 1\ \({2r^2 \over N^2}>1)\ .}\eqn\xxii
+{dV\over d\Phi}= -{w\Phi\over \Phi_{\!_0}^2}\, 
+d_{min}(\{I_{T_m}\})=O({1\over {\sqrt{g}}})
+\eqalign{\hG_{mn}= & G^{(10)}_{Smn}, \quad C^m_\mu=\hG^{mn}G^{(10)}_{Sn\mu},\quad G_{S\mu\nu}=G^{(10)}_{S\mu\nu}-G^{(10)}_{Sm\mu}G^{(10)}_{Sn\nu}\hG^{mn}\cr\Phi= & \Phi^{(10)}-{1\over 2}\ln\det\hG, \quad \lambda_2=e^{-\Phi}, \quadg_{\mu\nu}=e^{-\Phi} G_{S\mu\nu}. \cr}\eqn\efivefive
+\det_{\{\overline{h_\alpha}\},\{l_{\beta}\}}
+\phi^1 + \ii\phi^2 = (x+\ii y) u \exp(\ii\chi)
+({\cal L}_a g)_{ij} = 0, \ \ \ \ ({\cal L}_a H)_{ijk} = 0 ,
+\eqalign{J_+(\l) &=-\kappa\Tr(\l\cdot\partial_+  g\ g^{-1}),\cr         J_-(\l) &= \kappa\Tr(\l\cdot g^{-1}\partial_- g), \cr}  \eqn\six
+x^{c}_{\mu}=x_{\mu}+A_{\mu}
+\eps_q=\pmatrix{0&1\cr -q&0}, \qquad   T\eps_qT^t=T^t\eps_qT=\eps_q\qdet T                         \eqno(15)
+{\ddot X}_i + 2 [{\dot X}_i , A] + [X_i ,{\dot A}] +\big[ [X_i ,A],A \big] + V_{,i} ({\vec X}) + i \sum_j [{\tilde \Lambda_{ij} }, X_j ] = 0\eqn\eqN
+S_{ab}\equiv P_{a}SP_{b},\quad \quad \quad a,b\in \{-,0,+\}  
+\epsilon^{\mu\nu}F_{\mu\nu}\propto \partial_t A
+|g\ket=\hc{c}(g)|0_R\ket,\quad \hc{c}(g)=\intR\frac{d\mu}{\mu^{1/2}}g(\mu)\hc{c_{\mu}}.
+\left[\begin{array}{c}     \,h_{\mu\nu}(x,y_+)\, \\ \, h_{\mu\nu}(x,y_-)\,     \end{array}\right]=     - 8 \pi G_5 l\,{\bf G}(\Box)     \left[\begin{array}{c}     \,T^+_{\mu \nu} - \frac{1}{3} \eta_{\mu \nu} T^+\, \\       \,T^-_{\mu \nu} - \frac{1}{3} \eta_{\mu \nu} T^-\,      \end{array}\right]    - 2l\,{\bf G}(\Box) \left[\begin{array}{c}        \,\xi^+,_{\mu \nu}\, \\                  \, - \xi^-,_{\mu \nu}       \end{array}\right].                    
+-(P-\srd+\srd\delta_{il})\bPsi_P = (P-\fvx)\bPsi_{P-1} +\std\bPhi_{P-1}
+\dot z_1 = - N^z(z_1) = - g(z_1) = -\frac{z_1}{P_z(z_2-z_1)};~~~\dot z_2 = -\frac{z_2}{P_z(z_2-z_1)}
+\tilde{J} \sim \lomega \inv{8 \cg} \tr W^\alpha  W_\alpha \romega
+\gathered    g(\hbar) = \exp( \hbar^{-1} \calO_A(\hbar)) ,\\    \calO_A(\hbar) =    \oint : A\left(\lambda,\hbar\frac{\der}{\der \lambda}\right)                 \psi(\lambda) \cdot \psi^*(\lambda):    \frac{d\lambda}{2 \pi i},\endgathered\tag 1.7.48
+Z^{(n)}=Z^{(n-1)},\quad n\ge2, \eqno{(3.36)}
