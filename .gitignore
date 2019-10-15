@@ -1,4 +1,7 @@
 im2latex-dataset
-src/data
+*.csv
+*.txt
+*.h5
+*.png
 *.lst
 *.pyc
