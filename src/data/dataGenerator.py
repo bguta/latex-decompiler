@@ -3,7 +3,7 @@ warnings.filterwarnings("ignore") # ignore tensorflow warnings
 
 import numpy as np
 import tensorflow.keras as keras
-from PIL import Image
+from PIL import Image, ImageOps
 import io
 from sympy import preview
 
@@ -107,6 +107,6 @@ class generator(keras.utils.Sequence):
         '''
         Load the image as a numpy array
         '''
-        img = Image.open(img_path).convert('L')
+        img = ImageOps.invert(Image.open(img_path).convert('L'))
         gray_image = np.array(img)
         return gray_image

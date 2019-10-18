@@ -43,7 +43,12 @@ class im2latex:
         image_input = Input(shape=(128,1024,1))
         x = cnn(image_input)
         x = Reshape((8, 64*128))(x)
-        language_model = Bidirectional(CuDNNLSTM(self.encoder_lstm_units, return_sequences=True, kernel_initializer='he_uniform'), merge_mode='sum')(x)
+
+        language_model = CuDNNLSTM(self.encoder_lstm_units, return_sequences=True, kernel_initializer='he_uniform')(x)
+        #language_model = CuDNNLSTM(self.encoder_lstm_units, return_sequences=False, kernel_initializer='he_uniform')(language_model)
+        #language_model = Lambda(lambda xin: K.expand_dims(xin, axis=-1))(language_model)
+        #language_model = CuDNNLSTM(self.encoder_lstm_units, return_sequences=True,  return_state=True, kernel_initializer='he_uniform')(language_model)
+        #language_model = CuDNNLSTM(self.encoder_lstm_units, return_sequences=True, kernel_initializer='he_uniform')(language_model)
 
         attention = TimeDistributed(Dense(1, activation='tanh'))(language_model)
         attention = Flatten()(attention)
@@ -53,13 +58,14 @@ class im2latex:
         
         applied_attention = Multiply()([language_model, attention])
         language_model = Lambda(lambda xin: K.sum(xin, axis=1))(applied_attention)
-        
-        language_model = RepeatVector(self.embedding_size)(language_model)
+        language_model = Lambda(lambda xin: K.expand_dims(xin, axis=-1))(language_model)
 
-        decoder = Bidirectional(CuDNNLSTM(self.decoder_lstm_units, return_sequences=True, kernel_initializer='he_uniform', return_state=True),merge_mode='sum')(language_model)
-        #decoder = Dropout(0.5)(decoder)
-        decoder = Bidirectional(CuDNNLSTM(self.decoder_lstm_units, return_sequences=True, kernel_initializer='he_uniform'),merge_mode='sum')(decoder)
-        output = TimeDistributed(Dense(self.vocab_size, activation='softmax', kernel_initializer='he_uniform'))(decoder)
+        #decoder = CuDNNLSTM(self.decoder_lstm_units, return_sequences=True, kernel_initializer='he_uniform', return_state=True)(language_model)
+        #decoder = Dropout(0.1)(decoder)
+        # decoder = CuDNNLSTM(self.decoder_lstm_units, return_sequences=True, kernel_initializer='he_uniform', return_state=True)(decoder)
+        #decoder = Dropout(0.1)(decoder)
+        decoder = CuDNNLSTM(self.decoder_lstm_units, return_sequences=True, kernel_initializer='he_uniform', return_state=False)(language_model)
+        output = TimeDistributed(Dense(self.vocab_size, activation=None, kernel_initializer='he_uniform'))(decoder)
         
         model = Model(inputs=[image_input], outputs=output, name=self.name)
         self.model = model

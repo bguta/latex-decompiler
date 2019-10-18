@@ -30,22 +30,22 @@ def decode_equation(encoding, vocab_list):
     return decoded_string.strip()
 
 def preprocess(x):
-    return x/255.
+    return x
 
 # hyperparameters + files
 DATA_DIR = 'data/'
 IMAGE_DIR = DATA_DIR + 'images/'
 DATASET = 'dataset.csv'
 MODEL_DIR = DATA_DIR + 'saved_model/'
-VOCAB = 'vocab_995.txt'
+VOCAB = 'vocab_50k.txt'
 BATCH_SIZE = 1
 EPOCHS = 1
 START_EPOCH = 0
 IMAGE_DIM = (128, 1024)
 load_saved_model = True
-max_equation_length = 314
-encoder_lstm_units = 256
-decoder_lstm_units = 256
+max_equation_length = 659
+encoder_lstm_units = max_equation_length
+decoder_lstm_units = 512
 
 # import the equations + image names and the tokens
 dataset = pd.read_csv(DATA_DIR+DATASET)

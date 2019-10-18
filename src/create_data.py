@@ -68,9 +68,10 @@ class create_data:
         formulaFile = open(self.__formula_file, 'r', encoding="utf8")
         formulas = formulaFile.read().split('\n')
         formulaFile.close()
+        full_len = len(formulas)
 
         dataset = {'image_name': [], 'latex_equations': []}
-        with click.progressbar(range(1000)) as bar:
+        with click.progressbar(range(50000)) as bar:
             for i in bar:
                 try:
                     im_name = str(uuid.uuid4().hex) + '.png'
