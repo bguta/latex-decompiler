@@ -22,10 +22,12 @@ def encode_equation(string, vocab_list, dim):
             encoding[i][0] = 1.0
     return encoding
 
-def encode_ctc_equation(string, vocab_list, dim):
+def encode_ctc_equation(string, vocab_list):
     encoding = [vocab_list.index(x) if x in vocab_list else 0 for x in string.split(' ')]
-    encoding += [0]*(dim[0] - len(encoding))
-    return np.array(encoding)
+    encoding.insert(0, len(vocab_list) - 2) # insert the start token
+    encoding += [len(vocab_list) - 1] # insert the end token
+    #encoding += [0]*(dim[0] - len(encoding))
+    return np.array(encoding, dtype=np.float32)
 
 
 class generator(keras.utils.Sequence):
@@ -72,7 +74,7 @@ class generator(keras.utils.Sequence):
         'Generate one batch of data'
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
         list_IDs_batch = [self.list_IDs[k] for k in indexes]
-        return self.__generate_seq(list_IDs_batch)
+        return self.__generate_token_seq(list_IDs_batch)
 
     def on_epoch_end(self):
         'Updates indexes after each epoch'
@@ -102,6 +104,42 @@ class generator(keras.utils.Sequence):
             Y[i, ] = encoded_equation
 
         return X, Y
+    
+    def __generate_token_seq(self, list_IDs_batch):
+        X = []
+        Y = []
+
+        for i, ID in enumerate(list_IDs_batch):
+            im_name = self.df['image_name'].loc[ID]
+            image_df = self.target_df[self.target_df['image_name'] == im_name]
+            img_path = f"{self.base_path}/{im_name}"
+
+
+            img = self.__load_grayscale(img_path)
+            raw_equation = image_df.latex_equations.values[0]
+            encoded_equation = encode_ctc_equation(raw_equation, self.vocab_list)
+            time_seq_equations = self.__make_time_seq(encoded_equation, self.eq_dim[0])
+            img = self.preprocess(img)
+            img = np.expand_dims(np.expand_dims(img, axis=-1),axis=0)
+
+            #for time_step in range(len(encoded_equation) - 1):
+            batch = len(encoded_equation)-1
+            X = [np.repeat(img, batch, axis=0), time_seq_equations[:batch][:] ]
+            
+            Y = np.expand_dims(encoded_equation[1:], axis=-1)
+        return X, Y
+
+
+    def __make_time_seq(self, y, dim):
+        '''
+        y must be a rank 1 tensor
+        '''
+        length = len(y)
+        matrix = np.zeros((length, dim)).astype(np.float32)
+        valid_indices = np.nonzero(y)[0][-1] + 1
+        for i in range(valid_indices):
+            matrix[i][:i+1] = y[:i+1]
+        return matrix
 
     def __load_grayscale(self, img_path):
         '''

@@ -29,6 +29,25 @@ def decode_equation(encoding, vocab_list):
     decoded_string = ' '.join(tokens)
     return decoded_string.strip()
 
+def decode(enc, vocab):
+    ids = enc.astype(int)
+    tokens = [vocab[x] for x in ids]
+    decoded_string = ' '.join(tokens)
+    return decoded_string.strip()
+
+def make_prediction(img, seq, vocab):
+    max_len = len(seq[0])
+    copy = np.array(seq)
+    for i in range(1,max_len):
+        yp = np.argmax(softmax(model.predict([img, copy]), axis=-1),axis=-1)
+        copy[0][i] = yp
+        if yp == len(vocab) - 1:
+            break
+    return copy
+
+def show_latex(tex):
+    preview(f'${tex}$', viewer='file', filename='output.png', euler=False)
+
 def preprocess(x):
     return x
 
@@ -43,12 +62,13 @@ EPOCHS = 1
 START_EPOCH = 0
 IMAGE_DIM = (128, 1024)
 load_saved_model = True
-max_equation_length = 659
-encoder_lstm_units = max_equation_length
+max_equation_length = 659 + 2
+encoder_lstm_units = 256
 decoder_lstm_units = 512
 
 # import the equations + image names and the tokens
 dataset = pd.read_csv(DATA_DIR+DATASET)
+#dataset = dataset.head(10)
 vocabFile = open(DATA_DIR+VOCAB, 'r', encoding="utf8")
 vocab_tokens = [x.replace('\n', '') for x in vocabFile.readlines()]
 vocabFile.close()

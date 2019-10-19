@@ -60,6 +60,25 @@ def decode_equation(encoding, vocab_list):
 def preprocess(x):
     return x
 
+def generate_data(generator):
+    epoch_len = len(generator)
+    batch_size = 16
+    i = 0
+    while True:
+        X,y = generator.__getitem__(i)
+        steps = len(y)
+        batchs = steps // batch_size
+        if batchs < 0:
+            batchs = steps
+        imgs = np.array_split(X[0], batchs)
+        states = np.array_split(X[1], batchs)
+        outputs = np.array_split(y, batchs)
+
+        for j in range(len(imgs)):
+            yield ([ imgs[j], states[j] ], outputs[j])
+        if i > epoch_len:
+            i = 0
+            generator.on_epoch_end()
 def train():
     # hyperparameters + files
     DATA_DIR = 'data/'
@@ -67,19 +86,19 @@ def train():
     DATASET = 'dataset.csv'
     MODEL_DIR = DATA_DIR + 'saved_model/'
     VOCAB = 'vocab_50k.txt'
-    BATCH_SIZE = 32
-    EPOCHS = 10
+    BATCH_SIZE = 1
+    EPOCHS = 5
     START_EPOCH = 0
     IMAGE_DIM = (128, 1024)
     load_saved_model = False
-    max_equation_length = 659
-    encoder_lstm_units = max_equation_length
+    max_equation_length = 659 + 2 # 659 tokens + the 2 start/end tokens
+    encoder_lstm_units = 256
     decoder_lstm_units = 512
 
 
     # import the equations + image names and the tokens
     dataset = pd.read_csv(DATA_DIR+DATASET)
-    #smaller = dataset.head(20)
+    #dataset = dataset.head(20)
     vocabFile = open(DATA_DIR+VOCAB, 'r', encoding="utf8")
     vocab_tokens = [x.replace('\n', '') for x in vocabFile.readlines()]
     vocabFile.close()
@@ -118,7 +137,7 @@ def train():
     model = latex_model.model
     if load_saved_model:
         model.load_weights(MODEL_DIR + latex_model.name + '.h5')
-    model.compile(optimizer=Adam(lr=1e-2), loss=ce, metrics=[acc, acc_full])
+    model.compile(optimizer=Adam(lr=1e-2), loss=ce, metrics=[acc])
     model.summary()
     input()
 
@@ -137,12 +156,14 @@ def train():
 
     # train
     history = model.fit_generator(
-        train_generator,
-        validation_data=val_generator,
+        generate_data(train_generator),
+        steps_per_epoch=50000,
+        validation_data=generate_data(val_generator),
+        validation_steps=20000,
         callbacks=[nan_stop, checkpoint, reduce_lr],
-        workers=3,
+        workers=1,
         epochs=EPOCHS,
-        use_multiprocessing=True,
+        use_multiprocessing=False,
         initial_epoch=0
     )
 

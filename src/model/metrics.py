@@ -8,12 +8,9 @@ def focal(y_true, y_pred):
     return sm.metrics.f1_score(y_true, y_pred)
 
 def acc(y_true, y_pred):
-    gt = K.argmax(y_true, axis=-1)
-    pr = K.argmax(K.softmax(y_pred), axis=-1)
-
-    mask = K.greater(gt, 0)
-    
-    return K.mean(K.equal(tf.boolean_mask(gt,mask), tf.boolean_mask(pr,mask)) )
+    pr = K.cast(K.argmax(K.softmax(y_pred), axis=-1), 'float32')
+    gt = K.cast(y_true, 'float32'),
+    return K.mean(K.equal(gt, pr))
 
 def acc_full(y_true, y_pred):
     gt = K.argmax(y_true, axis=-1)
@@ -32,5 +29,6 @@ def acc_full(y_true, y_pred):
 #     return tf.keras.metrics.sparse_categorical_accuracy(K.argmax(y_true, axis=-1), K.softmax(y_pred))#sm.metrics.recall(y_true, K.softmax(y_pred))
 
 def ce(y_true, y_pred):
-    return K.mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=K.argmax(y_true, axis=-1), logits=y_pred)) #sm.losses.categorical_focal_loss(y_true, K.softmax(y_pred))
+    gt = K.cast(y_true, 'int32')
+    return K.mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=K.squeeze(gt,axis=-1), logits=y_pred)) #sm.losses.categorical_focal_loss(y_true, K.softmax(y_pred))
 
