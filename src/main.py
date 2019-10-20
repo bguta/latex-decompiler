@@ -10,7 +10,7 @@ import sympy as sy
 from sklearn.model_selection import train_test_split
 from create_data import create_data
 from model.model import im2latex
-from model.metrics import ce, acc, acc_full
+from model.metrics import ce, acc, acc_full, focal_loss
 from data.dataGenerator import generator
 from tensorflow.keras.callbacks import EarlyStopping, TerminateOnNaN, ModelCheckpoint, LearningRateScheduler, ReduceLROnPlateau
 from tensorflow.keras.optimizers import Adam
@@ -58,7 +58,7 @@ def decode_equation(encoding, vocab_list):
     return decoded_string
 
 def preprocess(x):
-    return x
+    return x/255.
 
 def train():
     # hyperparameters + files
@@ -67,14 +67,16 @@ def train():
     DATASET = 'dataset.csv'
     MODEL_DIR = DATA_DIR + 'saved_model/'
     VOCAB = 'vocab_50k.txt'
-    BATCH_SIZE = 32
+    BATCH_SIZE = 2
     EPOCHS = 10
     START_EPOCH = 0
     IMAGE_DIM = (128, 1024)
     load_saved_model = False
     max_equation_length = 659
-    encoder_lstm_units = max_equation_length
-    decoder_lstm_units = 512
+    encoder_lstm_units = 256
+    decoder_lstm_units = 256
+    gamma = 2.
+    alpha = 4.
 
 
     # import the equations + image names and the tokens
@@ -117,8 +119,9 @@ def train():
     latex_model = im2latex(encoder_lstm_units, decoder_lstm_units, vocab_tokens, max_equation_length)
     model = latex_model.model
     if load_saved_model:
+        print('Loading Weights')
         model.load_weights(MODEL_DIR + latex_model.name + '.h5')
-    model.compile(optimizer=Adam(lr=1e-2), loss=ce, metrics=[acc, acc_full])
+    model.compile(optimizer=Adam(lr=1e-3), loss=focal_loss(gamma=gamma, alpha=alpha), metrics=[acc, acc_full])
     model.summary()
     input()
 
@@ -132,8 +135,8 @@ def train():
         save_weights_only=True,
         mode='max'
     )
-    reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.7,
-                              patience=2, min_lr=1e-6)
+    reduce_lr = ReduceLROnPlateau(monitor='val_acc', factor=0.7,
+                              patience=2, min_lr=1e-8, verbose=1)
 
     # train
     history = model.fit_generator(

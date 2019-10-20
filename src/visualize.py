@@ -30,7 +30,7 @@ def decode_equation(encoding, vocab_list):
     return decoded_string.strip()
 
 def preprocess(x):
-    return x
+    return x/255.
 
 # hyperparameters + files
 DATA_DIR = 'data/'
@@ -44,8 +44,8 @@ START_EPOCH = 0
 IMAGE_DIM = (128, 1024)
 load_saved_model = True
 max_equation_length = 659
-encoder_lstm_units = max_equation_length
-decoder_lstm_units = 512
+encoder_lstm_units = 256
+decoder_lstm_units = 256
 
 # import the equations + image names and the tokens
 dataset = pd.read_csv(DATA_DIR+DATASET)
