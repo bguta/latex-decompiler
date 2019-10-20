@@ -15,6 +15,7 @@ from data.dataGenerator import generator
 from tensorflow.keras.callbacks import EarlyStopping, TerminateOnNaN, ModelCheckpoint, LearningRateScheduler, ReduceLROnPlateau
 from tensorflow.keras.optimizers import Adam
 import tensorflow.keras.backend as K
+from tensorflow.keras.utils import plot_model
 #import segmentation_models as sm
 
 def create_dataset():
@@ -58,24 +59,26 @@ def decode_equation(encoding, vocab_list):
     return decoded_string
 
 def preprocess(x):
-    return x
+    return x/255. - 0.5
 
 def generate_data(generator):
     epoch_len = len(generator)
-    batch_size = 16
+    batch_size = 8
     i = 0
     while True:
         X,y = generator.__getitem__(i)
         steps = len(y)
         batchs = steps // batch_size
-        if batchs < 0:
-            batchs = steps
+        if batchs <= 0:
+            batchs = 1
         imgs = np.array_split(X[0], batchs)
         states = np.array_split(X[1], batchs)
         outputs = np.array_split(y, batchs)
 
         for j in range(len(imgs)):
             yield ([ imgs[j], states[j] ], outputs[j])
+        if j == len(imgs) - 1:
+            i += 1
         if i > epoch_len:
             i = 0
             generator.on_epoch_end()
@@ -87,12 +90,12 @@ def train():
     MODEL_DIR = DATA_DIR + 'saved_model/'
     VOCAB = 'vocab_50k.txt'
     BATCH_SIZE = 1
-    EPOCHS = 5
+    EPOCHS = 10
     START_EPOCH = 0
     IMAGE_DIM = (128, 1024)
     load_saved_model = False
     max_equation_length = 659 + 2 # 659 tokens + the 2 start/end tokens
-    encoder_lstm_units = 256
+    encoder_lstm_units = 512
     decoder_lstm_units = 512
 
 
@@ -104,7 +107,7 @@ def train():
     vocabFile.close()
     vocab_size = len(vocab_tokens)
     train_idx, val_idx = train_test_split(
-        dataset.index, random_state=2312, test_size=0.20
+        dataset.index, random_state=876, test_size=0.20
     )
 
     # the validation and training data generators
@@ -133,12 +136,14 @@ def train():
                 n_channels=1)
     
     # initialize our model
-    latex_model = im2latex(encoder_lstm_units, decoder_lstm_units, vocab_tokens, max_equation_length)
+    latex_model = im2latex(decoder_lstm_units, vocab_tokens)
     model = latex_model.model
     if load_saved_model:
+        print('Loaded Model')
         model.load_weights(MODEL_DIR + latex_model.name + '.h5')
-    model.compile(optimizer=Adam(lr=1e-2), loss=ce, metrics=[acc])
+    model.compile(optimizer=Adam(lr=1e-4), loss=ce, metrics=[acc])
     model.summary()
+    #plot_model(model, to_file='model.png')
     input()
 
     # callbacks
@@ -152,14 +157,17 @@ def train():
         mode='max'
     )
     reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.7,
-                              patience=2, min_lr=1e-6)
+                              patience=3, min_lr=1e-10)
+    def scheduler(epoch, lr):
+        return lr*0.95       
+    lr_schedule = LearningRateScheduler(scheduler, verbose=1)     
 
     # train
     history = model.fit_generator(
         generate_data(train_generator),
-        steps_per_epoch=50000,
+        steps_per_epoch=20000,
         validation_data=generate_data(val_generator),
-        validation_steps=20000,
+        validation_steps=10000,
         callbacks=[nan_stop, checkpoint, reduce_lr],
         workers=1,
         epochs=EPOCHS,

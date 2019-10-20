@@ -17,15 +17,15 @@ def cnn(model):
 
     The given model by adding the cnn layers
     '''
-    model = Conv2D(32, kernel_size=3, padding='same', kernel_initializer='he_uniform')(model)
-    model = BatchNormalization()(model)
-    model = ReLU()(model)
-    model = MaxPool2D(pool_size=4)(model) # divides height and width by 4
     model = Conv2D(64, kernel_size=3, padding='same', kernel_initializer='he_uniform')(model)
     model = BatchNormalization()(model)
     model = ReLU()(model)
     model = MaxPool2D(pool_size=4)(model) # divides height and width by 4
-    model = BatchNormalization()(model)
     model = Conv2D(128, kernel_size=3, padding='same', kernel_initializer='he_uniform')(model)
+    model = BatchNormalization()(model)
+    model = ReLU()(model)
+    model = MaxPool2D(pool_size=4)(model) # divides height and width by 4
+    model = Conv2D(256, kernel_size=3, padding='same', kernel_initializer='he_uniform')(model)
+    model = BatchNormalization()(model)
     model = ReLU()(model)
     return model

@@ -8,8 +8,8 @@ def focal(y_true, y_pred):
     return sm.metrics.f1_score(y_true, y_pred)
 
 def acc(y_true, y_pred):
-    pr = K.cast(K.argmax(K.softmax(y_pred), axis=-1), 'float32')
-    gt = K.cast(y_true, 'float32'),
+    pr = K.argmax(K.softmax(y_pred), axis=-1)
+    gt = K.cast(y_true, 'int64')
     return K.mean(K.equal(gt, pr))
 
 def acc_full(y_true, y_pred):

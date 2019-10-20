@@ -5,7 +5,7 @@ import sys
 sys.path.append("..")
 
 
-from tensorflow.keras.layers import CuDNNLSTM, Input, Embedding, Dense, RepeatVector, TimeDistributed, Reshape, concatenate, Dropout, Flatten, Permute, Activation, Multiply, Lambda
+from tensorflow.keras.layers import CuDNNLSTM, Input, Embedding, Dense, RepeatVector, TimeDistributed, Reshape, concatenate, Dropout, Multiply, Lambda, Add, Activation
 import tensorflow.keras as keras
 from tensorflow.keras.models import Model
 from model.cnn import cnn
@@ -17,66 +17,61 @@ class im2latex:
 
     # Arguments
 
-        encoder_lstm_units:     The dimensionality of the output space for encoder LSTM layers
         decoder_lstm_units:     The dimensionality of the output space for decoder LSTM layers
         vocab_list:             The array of possible outputs of the language model
-        embedding_size:         The max length of the equation
 
 
     # Example
 
     .. code:: python
-    latex_model = im2latx(encoder_lstm_units, decoder_lstm_units, vocab_list)
+    latex_model = im2latx(decoder_lstm_units, vocab_list)
 
     model = latex_model.model
     """
 
-    def __init__(self, encoder_lstm_units, decoder_lstm_units, vocab_list, embedding_size=512):
+    def __init__(self, decoder_lstm_units, vocab_list, batch_size=16):
         self.name = 'im2latex'
-        self.encoder_lstm_units = encoder_lstm_units
         self.decoder_lstm_units = decoder_lstm_units
-        self.embedding_size = embedding_size
         self.vocab_list = vocab_list
         self.vocab_size = len(self.vocab_list)
+        self.batch_size = batch_size
 
         # encoder
-        image_input = Input(shape=(128,1024,1))
-        x = cnn(image_input)
-        x = Reshape((8, 64*128))(x)
-        #x = Dense(2048, activation='relu')(x)
-        language_model = CuDNNLSTM(self.encoder_lstm_units, return_sequences=True, kernel_initializer='he_uniform')(x)
-        #language_model = RepeatVector(1)(language_model) # add time dimension
+        image_input = Input(shape=(128,1024,1), name='image_input')
+        features = cnn(image_input)
+        features = Reshape((64*8, 256), name='reshape_features')(features)
+        features = Dense(self.decoder_lstm_units, activation='relu', name='embed_features')(features)
 
-        lstm_input = Input(shape=(self.embedding_size), name='lstm_input')
-        word_embedding = Embedding(input_dim=self.vocab_size, output_dim=self.encoder_lstm_units)(lstm_input)
+        lstm_input = Input(shape=(661,), name='previous_output')
+        word_embedding = Embedding(input_dim=self.vocab_size, output_dim=self.decoder_lstm_units, name='embed_previous')(lstm_input)
         
-        #language_model = CuDNNLSTM(self.encoder_lstm_units, return_sequences=True, kernel_initializer='he_uniform')(x)
-        #language_model = CuDNNLSTM(self.encoder_lstm_units, return_sequences=False, kernel_initializer='he_uniform')(language_model)
-        #language_model = Lambda(lambda xin: K.expand_dims(xin, axis=-1))(language_model)
-        #language_model = CuDNNLSTM(self.encoder_lstm_units, return_sequences=True,  return_state=True, kernel_initializer='he_uniform')(language_model)
-        #language_model = CuDNNLSTM(self.encoder_lstm_units, return_sequences=True, kernel_initializer='he_uniform')(language_model)
-
-        attention = TimeDistributed(Dense(1, activation='tanh'))(language_model)
-        attention = Flatten()(attention)
-        attention = Activation('softmax')(attention)
-        attention = RepeatVector(self.encoder_lstm_units)(attention)
-        attention = Permute([2, 1])(attention)
+        encode_word, state_h, state_c = CuDNNLSTM(self.decoder_lstm_units, return_sequences=False, kernel_initializer='he_uniform', return_state=True, name='encode_last_state')(word_embedding)
+        encode_word = RepeatVector(1, name='add_time_dim')(encode_word)
+        #h1_in = Input(shape=(self.decoder_lstm_units,), name='h1_in')
+        #h2_in = Input(shape=(self.decoder_lstm_units,), name='h2_in')
+        #hidden_state = [state_h, state_c]
         
-        applied_attention = Multiply()([language_model, attention])
-        language_model = Lambda(lambda xin: K.sum(xin, axis=1))(applied_attention)
-        language_model = RepeatVector(1)(language_model)
-        # language_model = Lambda(lambda xin: K.expand_dims(xin, axis=-1))(language_model)
+        #full_hstate = RepeatVector(1, name='combine_hidden_states')(concatenate([h1_in, h2_in], axis=1))
+        full_h_dense = Dense(self.decoder_lstm_units, name='densify_states_forAttention')(encode_word)
+        feature_dense = Dense(self.decoder_lstm_units, name='densify_features_forAttention')(features)
 
-        combined = concatenate([language_model, word_embedding], axis=1)
+        attention = Add(name='add_densified')([feature_dense, full_h_dense])
+        attention = Dropout(0.5)(attention)
+        attention = Activation('tanh')(attention)
+        attention = Dense(1, activation='softmax', name='make_attention_weights')(attention)
+        attention = Dropout(0.5)(attention)
+        context_vector = Multiply(name='apply_weights')([features, attention])
+        context_vector = Lambda(lambda xin: K.sum(xin, axis=1))(context_vector)
+        context_vector = RepeatVector(1, name='add_time_dim_toContextVec')(context_vector)
 
-        #decoder = CuDNNLSTM(self.decoder_lstm_units, return_sequences=True, kernel_initializer='he_uniform', return_state=True)(language_model)
-        #decoder = Dropout(0.1)(decoder)
-        # decoder = CuDNNLSTM(self.decoder_lstm_units, return_sequences=True, kernel_initializer='he_uniform', return_state=True)(combined)
-        #decoder = Dropout(0.1)(decoder)
-        decoder = CuDNNLSTM(self.decoder_lstm_units, return_sequences=False, kernel_initializer='he_uniform', return_state=False)(combined)
-        output = Dense(self.vocab_size, activation=None, kernel_initializer='he_uniform')(decoder)
+        combined = concatenate([context_vector, encode_word], axis=1, name='combine_context_and_word')
+
+        #decoder, hidden1, hidden2 = CuDNNLSTM(self.decoder_lstm_units, return_sequences=False, kernel_initializer='he_uniform', return_state=True, name='decode_context_and_word')(combined)
+        #decoder = RepeatVector(1, name='add_time_dim_for_decoder')(decoder)
+        decoder, h1, h2 = CuDNNLSTM(self.decoder_lstm_units, return_sequences=False, kernel_initializer='he_uniform', return_state=True, stateful=False)(combined, initial_state=[state_h, state_c])
+        output = Dense(self.vocab_size, activation=None, kernel_initializer='he_uniform', name='equation')(decoder)
         
-        model = Model(inputs=[image_input, lstm_input], outputs=output, name=self.name)
+        model = Model(inputs=[image_input, lstm_input], outputs=[output], name=self.name)
         self.model = model
 
     def predict(self, image):

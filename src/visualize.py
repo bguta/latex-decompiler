@@ -13,6 +13,24 @@ from sklearn.model_selection import train_test_split
 from model.model import im2latex
 from data.dataGenerator import generator
 from scipy.special import softmax
+import tensorflow.keras.backend as K
+
+def beam_search_decoder(data, k):
+    sequences = [[list(), 1.0]]
+    # walk over each step in sequence
+    for row in data:
+        all_candidates = list()
+        # expand each current candidate
+        for i in range(len(sequences)):
+            seq, score = sequences[i]
+            for j in range(len(row)):
+                candidate = [seq + [j], score * -log(row[j])]
+                all_candidates.append(candidate)
+        # order all candidates by score
+        ordered = sorted(all_candidates, key=lambda tup:tup[1])
+        # select k best
+        sequences = ordered[:k]
+    return sequences
 
 
 def encode_equation(string, vocab_list, dim):
@@ -35,9 +53,10 @@ def decode(enc, vocab):
     decoded_string = ' '.join(tokens)
     return decoded_string.strip()
 
-def make_prediction(img, seq, vocab):
-    max_len = len(seq[0])
-    copy = np.array(seq)
+def make_prediction(img, seq, vocab, max_len=661):
+    copy = np.zeros((1,max_len))
+    copy[0][0] = seq[0][0]
+    yp = seq
     for i in range(1,max_len):
         yp = np.argmax(softmax(model.predict([img, copy]), axis=-1),axis=-1)
         copy[0][i] = yp
@@ -103,7 +122,7 @@ val_generator = generator(list_IDs=val_idx,
             n_channels=1)
 
 # the model
-latex_model = im2latex(encoder_lstm_units, decoder_lstm_units, vocab_tokens, max_equation_length)
+latex_model = im2latex(decoder_lstm_units, vocab_tokens)
 model = latex_model.model
 if load_saved_model:
     print('Loading weights')

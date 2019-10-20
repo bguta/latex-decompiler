@@ -27,7 +27,7 @@ def encode_ctc_equation(string, vocab_list):
     encoding.insert(0, len(vocab_list) - 2) # insert the start token
     encoding += [len(vocab_list) - 1] # insert the end token
     #encoding += [0]*(dim[0] - len(encoding))
-    return np.array(encoding, dtype=np.float32)
+    return np.array(encoding, dtype=np.int32)
 
 
 class generator(keras.utils.Sequence):
@@ -124,7 +124,7 @@ class generator(keras.utils.Sequence):
 
             #for time_step in range(len(encoded_equation) - 1):
             batch = len(encoded_equation)-1
-            X = [np.repeat(img, batch, axis=0), time_seq_equations[:batch][:] ]
+            X = [np.repeat(img, batch, axis=0), time_seq_equations[:-1,:]]
             
             Y = np.expand_dims(encoded_equation[1:], axis=-1)
         return X, Y
