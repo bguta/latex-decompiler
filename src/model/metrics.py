@@ -29,6 +29,6 @@ def acc_full(y_true, y_pred):
 #     return tf.keras.metrics.sparse_categorical_accuracy(K.argmax(y_true, axis=-1), K.softmax(y_pred))#sm.metrics.recall(y_true, K.softmax(y_pred))
 
 def ce(y_true, y_pred):
-    gt = K.cast(y_true, 'int32')
+    gt = K.cast(y_true, 'int64')
     return K.mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=K.squeeze(gt,axis=-1), logits=y_pred)) #sm.losses.categorical_focal_loss(y_true, K.softmax(y_pred))
 

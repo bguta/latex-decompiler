@@ -27,7 +27,7 @@ def encode_ctc_equation(string, vocab_list):
     encoding.insert(0, len(vocab_list) - 2) # insert the start token
     encoding += [len(vocab_list) - 1] # insert the end token
     #encoding += [0]*(dim[0] - len(encoding))
-    return np.array(encoding, dtype=np.int32)
+    return np.array(encoding, dtype=np.float32)
 
 
 class generator(keras.utils.Sequence):
@@ -118,15 +118,16 @@ class generator(keras.utils.Sequence):
             img = self.__load_grayscale(img_path)
             raw_equation = image_df.latex_equations.values[0]
             encoded_equation = encode_ctc_equation(raw_equation, self.vocab_list)
-            time_seq_equations = self.__make_time_seq(encoded_equation, self.eq_dim[0])
+            #time_seq_equations = self.__make_time_seq(encoded_equation, self.eq_dim[0])
+            img = np.expand_dims(img, axis=0)
             img = self.preprocess(img)
-            img = np.expand_dims(np.expand_dims(img, axis=-1),axis=0)
+            #img = np.repeat(img, 3, axis=-1)
 
             #for time_step in range(len(encoded_equation) - 1):
             batch = len(encoded_equation)-1
-            X = [np.repeat(img, batch, axis=0), time_seq_equations[:-1,:]]
+            X = [np.repeat(img, batch, axis=0), encoded_equation[:-1]]
             
-            Y = np.expand_dims(encoded_equation[1:], axis=-1)
+            Y = encoded_equation[1:]
         return X, Y
 
 
@@ -145,6 +146,6 @@ class generator(keras.utils.Sequence):
         '''
         Load the image as a numpy array
         '''
-        img = ImageOps.invert(Image.open(img_path).convert('L'))
-        gray_image = np.array(img)
-        return gray_image
+        img = ImageOps.invert(Image.open(img_path).convert('RGB'))
+        image = np.array(img, dtype=np.float32)
+        return image

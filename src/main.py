@@ -9,13 +9,15 @@ import pandas as pd
 import sympy as sy
 from sklearn.model_selection import train_test_split
 from create_data import create_data
-from model.model import im2latex
+from model.model_v1 import im2latex
 from model.metrics import ce, acc, acc_full
 from data.dataGenerator import generator
-from tensorflow.keras.callbacks import EarlyStopping, TerminateOnNaN, ModelCheckpoint, LearningRateScheduler, ReduceLROnPlateau
-from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import EarlyStopping, TerminateOnNaN, ModelCheckpoint, LearningRateScheduler, ReduceLROnPlateau, CSVLogger
+from tensorflow.keras.optimizers import Adam, Nadam
 import tensorflow.keras.backend as K
 from tensorflow.keras.utils import plot_model
+tf_session = K.get_session()
+tf_graph = tf.get_default_graph()
 #import segmentation_models as sm
 
 def create_dataset():
@@ -59,11 +61,11 @@ def decode_equation(encoding, vocab_list):
     return decoded_string
 
 def preprocess(x):
-    return x/255. - 0.5
+    return x/255.
 
-def generate_data(generator):
+def generate_data(generator, model):
     epoch_len = len(generator)
-    batch_size = 8
+    batch_size = 1
     i = 0
     while True:
         X,y = generator.__getitem__(i)
@@ -72,13 +74,17 @@ def generate_data(generator):
         if batchs <= 0:
             batchs = 1
         imgs = np.array_split(X[0], batchs)
-        states = np.array_split(X[1], batchs)
+        #states = np.array_split(X[1], batchs)
+        last_out = np.array_split(X[1], batchs)
         outputs = np.array_split(y, batchs)
 
         for j in range(len(imgs)):
-            yield ([ imgs[j], states[j] ], outputs[j])
+            yield ([ imgs[j], last_out[j] ], outputs[j])
         if j == len(imgs) - 1:
             i += 1
+            with tf_session.as_default():
+                with tf_graph.as_default():
+                    model.reset_states()
         if i > epoch_len:
             i = 0
             generator.on_epoch_end()
@@ -90,12 +96,12 @@ def train():
     MODEL_DIR = DATA_DIR + 'saved_model/'
     VOCAB = 'vocab_50k.txt'
     BATCH_SIZE = 1
-    EPOCHS = 10
+    EPOCHS = 130
     START_EPOCH = 0
     IMAGE_DIM = (128, 1024)
     load_saved_model = False
     max_equation_length = 659 + 2 # 659 tokens + the 2 start/end tokens
-    encoder_lstm_units = 512
+    encoder_lstm_units = 128
     decoder_lstm_units = 512
 
 
@@ -136,12 +142,12 @@ def train():
                 n_channels=1)
     
     # initialize our model
-    latex_model = im2latex(decoder_lstm_units, vocab_tokens)
+    latex_model = im2latex(encoder_lstm_units, decoder_lstm_units, vocab_tokens)
     model = latex_model.model
     if load_saved_model:
         print('Loaded Model')
         model.load_weights(MODEL_DIR + latex_model.name + '.h5')
-    model.compile(optimizer=Adam(lr=1e-4), loss=ce, metrics=[acc])
+    model.compile(optimizer=Nadam(lr=1e-3), loss=ce, metrics=[acc])
     model.summary()
     #plot_model(model, to_file='model.png')
     input()
@@ -156,23 +162,24 @@ def train():
         save_weights_only=True,
         mode='max'
     )
-    reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.7,
-                              patience=3, min_lr=1e-10)
+    reduce_lr = ReduceLROnPlateau(monitor='val_acc', factor=0.7,
+                              patience=5, min_lr=1e-10, verbose=1)
     def scheduler(epoch, lr):
         return lr*0.95       
-    lr_schedule = LearningRateScheduler(scheduler, verbose=1)     
-
+    lr_schedule = LearningRateScheduler(scheduler, verbose=1)
+    early_stopping = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
+    csv_logger = CSVLogger(MODEL_DIR+'training_log.csv', append=True)
     # train
     history = model.fit_generator(
-        generate_data(train_generator),
+        generate_data(train_generator, model),
         steps_per_epoch=20000,
-        validation_data=generate_data(val_generator),
-        validation_steps=10000,
-        callbacks=[nan_stop, checkpoint, reduce_lr],
+        validation_data=generate_data(val_generator, model),
+        validation_steps=5000,
+        callbacks=[nan_stop, checkpoint, reduce_lr, csv_logger, early_stopping],
         workers=1,
         epochs=EPOCHS,
         use_multiprocessing=False,
-        initial_epoch=0
+        initial_epoch=START_EPOCH
     )
 
 if __name__ == '__main__':
