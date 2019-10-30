@@ -1,18 +1,14 @@
-import warnings
-warnings.filterwarnings("ignore") # ignore tensorflow warnings
 import sys
 # we would like to be in the src directory to have access to main files
 sys.path.append("..")
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.nn import init
+from torch.distributions.uniform import Uniform
 
-from tensorflow.keras.layers import CuDNNLSTM, Input, Dense, RepeatVector, TimeDistributed, Reshape, Bidirectional, Dropout, Flatten, Permute, Activation, Multiply, Lambda
-import tensorflow.keras as keras
-from tensorflow.keras.models import Model
-from model.cnn import cnn
-import numpy as np
-import tensorflow.keras.backend as K
-
-class im2latex:
+class im2latex(nn.Module):
     r""" Create the image to latex converter model.
 
     # Arguments
@@ -31,95 +27,152 @@ class im2latex:
     model = latex_model.model
     """
 
-    def __init__(self, encoder_lstm_units, decoder_lstm_units, vocab_list, embedding_size=512):
+    def __init__(self,
+                vocab_size,
+                dropout=0.3,
+                encoder_lstm_units=256,
+                decoder_lstm_units=512,
+                embedding_size=512):
+        super(im2latex, self).__init__()
         self.name = 'im2latex'
         self.encoder_lstm_units = encoder_lstm_units
         self.decoder_lstm_units = decoder_lstm_units
         self.embedding_size = embedding_size
-        self.vocab_list = vocab_list
-        self.vocab_size = len(self.vocab_list)
+        self.vocab_size = vocab_size
 
         # encoder
-        image_input = Input(shape=(128,1024,1))
-        x = cnn(image_input)
-        x = Reshape((1024, 128*128))(x)
+        self.cnn_encoder = nn.Sequential(
+            nn.Conv2d(3, 64, 3, 1, 1),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2, 1),
 
-        language_model, h1, h2 = CuDNNLSTM(self.decoder_lstm_units, return_sequences=False, return_state=True)(x)
-        language_model = RepeatVector(self.embedding_size)(language_model)
-        language_model = Dropout(0.5)(language_model)
-        #language_model = CuDNNLSTM(self.encoder_lstm_units, return_sequences=False, kernel_initializer='he_uniform')(language_model)
-        #language_model = Lambda(lambda xin: K.expand_dims(xin, axis=-1))(language_model)
-        #language_model = CuDNNLSTM(self.encoder_lstm_units, return_sequences=True,  return_state=True, kernel_initializer='he_uniform')(language_model)
-        #language_model = CuDNNLSTM(self.encoder_lstm_units, return_sequences=True, kernel_initializer='he_uniform')(language_model)
+            nn.Conv2d(64, 128, 3, 1, 1),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2, 1),
 
-        # attention = TimeDistributed(Dense(1, activation='tanh'))(language_model)
-        # attention = Flatten()(attention)
-        # attention = Activation('softmax')(attention)
-        # attention = RepeatVector(self.encoder_lstm_units)(attention)
-        # attention = Permute([2, 1])(attention)
-        
-        # applied_attention = Multiply()([language_model, attention])
-        # language_model = Lambda(lambda xin: K.sum(xin, axis=1))(applied_attention)
-        # language_model = Lambda(lambda xin: K.expand_dims(xin, axis=-1))(language_model)
+            nn.Conv2d(128, 256, 3, 1, 1),
+            nn.ReLU(),
+            nn.Conv2d(256, 256, 3, 1, 1),
+            nn.ReLU(),
+            nn.MaxPool2d((2, 1), (2, 1), 0),
 
-        #decoder = CuDNNLSTM(self.decoder_lstm_units, return_sequences=True, kernel_initializer='he_uniform', return_state=True)(language_model)
-        #decoder = Dropout(0.1)(decoder)
-        #decoder = CuDNNLSTM(self.decoder_lstm_units, return_sequences=True, kernel_initializer='he_uniform', return_state=True)(decoder)
-        #decoder = Dropout(0.1)(decoder)
-        decoder = CuDNNLSTM(self.decoder_lstm_units, return_sequences=True, return_state=False)(language_model, initial_state=[h1, h2])
-        output = TimeDistributed(Dense(self.vocab_size, activation='softmax'))(decoder)
-        
-        model = Model(inputs=[image_input], outputs=output, name=self.name)
-        self.model = model
+            nn.Conv2d(256, self.encoder_lstm_units, 3, 1, 0),
+            nn.ReLU()
+        )
 
-    def predict(self, image):
-        '''
-        Predict the latex equation given the image
+        self.rnn_decoder = nn.LSTMCell(self.decoder_lstm_units+self.embedding_size, self.decoder_lstm_units)
+        self.embedding = nn.Embedding(self.vocab_size, self.embedding_size)
 
-        # Arguments
+        self.init_wh = nn.Linear(self.encoder_lstm_units, self.decoder_lstm_units)
+        self.init_wc = nn.Linear(self.encoder_lstm_units, self.decoder_lstm_units)
+        self.init_wo = nn.Linear(self.encoder_lstm_units, self.decoder_lstm_units)
 
-        image:      a numpy array of shape (H,W,C)
+        # attention
+        self.beta = nn.Parameter(torch.Tensor(self.encoder_lstm_units))
+        init.uniform_(self.beta, -1e-2, 1e-2)
+        self.W_1 = nn.Linear(self.encoder_lstm_units, self.encoder_lstm_units, bias=False)
+        self.W_2 = nn.Linear(self.decoder_lstm_units, self.encoder_lstm_units, bias=False)
 
-        # Returns
-        the string result of the prediction
+        self.W_3 = nn.Linear(self.decoder_lstm_units+self.embedding_size, self.decoder_lstm_units, bias=False)
+        self.W_out = nn.Linear(self.decoder_lstm_units, self.vocab_size, bias=False)
 
-        '''
-        im = np.expand_dims(image, axis=0)
-        eq = np.zeros((1, self.embedding_size, self.vocab_size))
-        prediction = np.squeeze(self.model.predict([image, eq]))
-        return self.decode_lstm(prediction, self.vocab_list)
-
-
+        self.add_pos_feat = False
+        self.dropout = nn.Dropout(p=dropout)
+        self.uniform = Uniform(0, 1)
     
-    def decode_lstm(self, model_output, vocab_list):
-        '''
-        decode the output of the model
+    def encode(self, imgs):
+        encoded_imgs = self.cnn_encoder(imgs)  # [Bactchs, encoder_size, H', W']
+        encoded_imgs = encoded_imgs.permute(0, 2, 3, 1)  # [Batchs, H', W', encoder_size]
+        B, H, W, _ = encoded_imgs.shape
+        encoded_imgs = encoded_imgs.contiguous().view(B, H*W, -1)
+        return encoded_imgs
+        
+    def init_decoder(self, enc_out):
+        """args:
+            enc_out: the output of row encoder [B, H*W, C]
+          return:
+            h_0, c_0:  h_0 and c_0's shape: [B, dec_rnn_h]
+            init_O : the average of enc_out  [B, dec_rnn_h]
+            for decoder
+        """
+        mean_enc_out = enc_out.mean(dim=1)
+        h = self._init_h(mean_enc_out)
+        c = self._init_c(mean_enc_out)
+        init_o = self._init_o(mean_enc_out)
+        return (h, c), init_o
 
-        # Arguments
+    def _init_h(self, mean_enc_out):
+        return torch.tanh(self.init_wh(mean_enc_out))
 
-        model_output:       The ouput of predictiction of the model of shape (embedding_size, vocab_size)
-        vocab_list:         The array of tokens that the model can predict
+    def _init_c(self, mean_enc_out):
+        return torch.tanh(self.init_wc(mean_enc_out))
 
-        # Returns
+    def _init_o(self, mean_enc_out):
+        return torch.tanh(self.init_wo(mean_enc_out))
+    
+    def _get_attn(self, encoder_output, h_t):
+        """Attention mechanism
+        args:
+            encoder_output: row encoder's output [B, L=H*W, C]
+            h_t: the current time step hidden state [B, dec_rnn_h]
+        return:
+            context: this time step context [B, C]
+            attn_scores: Attention scores
+        """
+        # cal alpha
+        alpha = torch.tanh(self.W_1(encoder_output)+self.W_2(h_t).unsqueeze(1))
+        alpha = torch.sum(self.beta*alpha, dim=-1)  # [B, L]
+        alpha = F.softmax(alpha, dim=-1)  # [B, L]
 
-        a string of the resulting decoded equation
-        '''
-        word_ids = np.argmax(model_output, axis=1)
-        equation = [vocab_list[x] for x in word_ids]
-        equation = ' '.join(equation)
-        return equation
+        # cal context: [B, C]
+        context = torch.bmm(alpha.unsqueeze(1), encoder_output)
+        context = context.squeeze(1)
+        return context, alpha
+    
+    def step_decoding(self, hidden_states, output_t, encoder_output, target):
+        """Runing one step decoding"""
 
+        prev_y = self.embedding(target).squeeze(1)  # [B, emb_size]
+        inp = torch.cat([prev_y, output_t], dim=1)  # [B, emb_size+dec_rnn_h]
+        h_t, c_t = self.rnn_decoder(inp, hidden_states)  # h_t:[B, dec_rnn_h]
+        h_t = self.dropout(h_t)
+        c_t = self.dropout(c_t)
 
-    # def save(self):
-    #     model_json = self.model.to_json()
-    #     with open("{}/{}.json".format(self.output_path, self.name), "w") as json_file:
-    #         json_file.write(model_json)
-    #     self.model.save_weights("{}/{}.h5".format(self.output_path, self.name))
+        # context_t : [B, C]
+        context_t, attn_scores = self._get_attn(encoder_output, h_t)
 
-    # def load(self, name=""):
-    #     output_name = self.name if name == "" else name
-    #     with open("{}/{}.json".format(self.output_path, output_name), "r") as json_file:
-    #         loaded_model_json = json_file.read()
-    #     self.model = model_from_json(loaded_model_json)
-    #     self.model.load_weights("{}/{}.h5".format(self.output_path, output_name))
+        # [B, dec_rnn_h]
+        output_t = self.W_3(torch.cat([h_t, context_t], dim=1)).tanh()
+        output_t = self.dropout(output_t)
 
+        # calculate logit
+        logit = F.softmax(self.W_out(output_t), dim=1)  # [B, out_size]
+
+        return (h_t, c_t), output_t, logit
+
+    def forward(self, imgs, formulas, epsilon=1.):
+        """args:
+        imgs: [B, C, H, W]
+        formulas: [B, MAX_LEN]
+        epsilon: probability of the current time step to
+                 use the true previous token
+        return:
+        logits: [B, MAX_LEN, VOCAB_SIZE]
+        """
+        # encoding
+        encoded_imgs = self.encode(imgs)  # [B, H*W, 512]
+        # init decoder's states
+        dec_states, o_t = self.init_decoder(encoded_imgs)
+        max_len = formulas.size(1)
+        logits = []
+        for t in range(max_len):
+            target = formulas[:, t:t+1]
+            # schedule sampling
+            if logits and self.uniform.sample().item() > epsilon:
+                target = torch.argmax(torch.log(logits[-1]), dim=1, keepdim=True)
+            # ont step decoding
+            dec_states, o_t, logit = self.step_decoding(
+                dec_states, o_t, encoded_imgs, target)
+            logits.append(logit)
+        logits = torch.stack(logits, dim=1)  # [B, MAX_LEN, out_size]
+        return logits
