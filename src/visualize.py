@@ -59,8 +59,9 @@ def make_prediction(img, seq, vocab, max_len=661):
     copy = np.zeros((1,max_len))
     copy[0][0] = seq[0][0]
     atts = []
+    features = []
     yp = np.expand_dims(seq[0][0],axis=0)
-    model.reset_state()
+    model.reset_states()
     for i in range(1,max_len):
         yp, att = model.predict([img, yp])
         yp = np.argmax(softmax(yp, axis=-1),axis=-1)
@@ -100,24 +101,30 @@ def show_latex(tex):
 def preprocess(x):
     return x/255.
 
+def test(index, generator):
+    x,y = generator.__getitem__(index)
+    img, start_seq = x[0][:1], np.expand_dims(x[1][:1], axis=0)
+    res, att = make_prediction(img, start_seq, vocab_tokens)
+    return res, att, img, y
+
 # hyperparameters + files
 DATA_DIR = 'data/'
 IMAGE_DIR = DATA_DIR + 'images/'
 DATASET = 'dataset.csv'
 MODEL_DIR = DATA_DIR + 'saved_model/'
-VOCAB = 'vocab_50k.txt'
+VOCAB = 'vocab_8k.txt'
 BATCH_SIZE = 1
 EPOCHS = 1
 START_EPOCH = 0
-IMAGE_DIM = (128, 1024)
+IMAGE_DIM = (32,416)
 load_saved_model = True
 max_equation_length = 659 + 2
-encoder_lstm_units = 128
-decoder_lstm_units = 256
+encoder_lstm_units = 256
+decoder_lstm_units = 512
 
 # import the equations + image names and the tokens
 dataset = pd.read_csv(DATA_DIR+DATASET)
-#dataset = dataset.head(10000)
+dataset = dataset.head(20)
 vocabFile = open(DATA_DIR+VOCAB, 'r', encoding="utf8")
 vocab_tokens = [x.replace('\n', '') for x in vocabFile.readlines()]
 vocabFile.close()
@@ -162,7 +169,7 @@ val_generator = generator(list_IDs=val_idx,
             n_channels=1)
 
 # the model
-latex_model = im2latex(encoder_lstm_units, decoder_lstm_units, vocab_tokens)
+latex_model = im2latex(encoder_lstm_units, decoder_lstm_units, vocab_tokens, visualize=True)
 model = latex_model.model
 if load_saved_model:
     print('Loading weights')

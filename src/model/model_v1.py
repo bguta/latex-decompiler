@@ -5,7 +5,7 @@ import sys
 sys.path.append("..")
 
 
-from tensorflow.keras.layers import CuDNNLSTM, Input, Embedding, Dense, RepeatVector, TimeDistributed, Reshape, concatenate, Dropout, Multiply, Lambda, Add, Activation, Conv2D, ReLU
+from tensorflow.keras.layers import CuDNNLSTM, CuDNNGRU, Input, Embedding, Dense, RepeatVector, TimeDistributed, Reshape, concatenate, Dropout, Multiply, Lambda, Add, Activation, Flatten
 import tensorflow.keras as keras
 from tensorflow.keras.models import Model
 from model.cnn import cnn
@@ -31,7 +31,7 @@ class im2latex:
     model = latex_model.model
     """
 
-    def __init__(self, encoder_lstm_units, decoder_lstm_units, vocab_list, batch_size=16):
+    def __init__(self, encoder_lstm_units, decoder_lstm_units, vocab_list, batch_size=1, visualize=False):
         self.name = 'im2latex'
         self.encoder_lstm_units = encoder_lstm_units
         self.decoder_lstm_units = decoder_lstm_units
@@ -40,45 +40,51 @@ class im2latex:
         self.batch_size = batch_size
 
         # encoder
-        image_input = Input(batch_shape=(1,128,1024,3), name='image_input')
+        image_input = Input(batch_shape=(batch_size,32,416,1), name='image_input')
         feature_extractor = cnn(image_input) #tf.keras.applications.VGG16(include_top=False, weights='imagenet', input_tensor=image_input)
 
-        #features = feature_extractor.output #cnn(image_input)
-        features = Reshape((4, 1024*4), name='reshape_features')(feature_extractor)
-        features = CuDNNLSTM(self.encoder_lstm_units, return_sequences=True, return_state=False, stateful=False)(features)
+        #features = Lambda(lambda xin: K.expand_dims(xin, axis=-1))(feature_extractor) #cnn(image_input)
+        features = Reshape((8*26,512), name='reshape_features')(feature_extractor)
+        features = CuDNNGRU(self.decoder_lstm_units, return_sequences=True, return_state=False, stateful=False)(features)
         #features = Dense(self.encoder_lstm_units, activation='relu', name='embed_features')(features)
 
         # lstm_input = Input(shape=(661,), name='previous_output_seq')
         # word_embedding = Embedding(input_dim=self.vocab_size, output_dim=self.decoder_lstm_units, name='embed_previous')(lstm_input)
 
-        last_token = Input(batch_shape=(1,1), name='previous_output_token')
+        last_token = Input(batch_shape=(batch_size,1), name='previous_output_token')
         token = Embedding(input_dim=self.vocab_size, output_dim=self.encoder_lstm_units, name='embed_previous_token')(last_token)
         
         # encode_word, state_h, state_c = CuDNNLSTM(self.decoder_lstm_units, return_sequences=False, kernel_initializer='he_uniform', return_state=True, name='encode_last_state')(word_embedding)
         # encode_word = RepeatVector(1, name='add_time_dim')(encode_word)
         #hidden_state = [state_h, state_c]
+
         
-        #full_hstate = RepeatVector(1, name='combine_hidden_states')(concatenate([h1_in, h2_in], axis=1))
+        #full_hstate = Repeat(1)(concatenate([h1, h2], axis=1,  name='combine_hidden_states'))
         full_h_dense = Dense(self.encoder_lstm_units, name='densify_token_forAttention')(token)
         feature_dense = Dense(self.encoder_lstm_units, name='densify_features_forAttention')(features)
 
         attention = Add(name='add_densified')([feature_dense, full_h_dense])
         #attention = Dropout(0.5)(attention)
-        attention = Activation('tanh')(attention)
-        attention = Dense(1, activation='softmax', name='make_attention_weights')(attention)
+        attention = Lambda(lambda xin: K.tanh(xin))(attention)
+        attention = Dense(1, name='make_attention_weights')(attention)
+        attention = Lambda(lambda xin: K.softmax(xin, axis=1))(attention)
         #attention = Dropout(0.5)(attention)
         context_vector = Multiply(name='apply_weights')([features, attention])
-        #context_vector = Lambda(lambda xin: K.sum(xin, axis=1))(context_vector)
-        #context_vector = RepeatVector(1, name='add_time_dim_toContextVec')(context_vector)
+        context_vector = Lambda(lambda xin: tf.reduce_sum(xin, axis=1))(context_vector)
+        context_vector = Lambda(lambda xin: tf.expand_dims(xin, axis=1), name='add_time_dim_toContextVec')(context_vector) # RepeatVector(1, name='add_time_dim_toContextVec')(context_vector)
 
         #combined = concatenate([context_vector, token], axis=-1, name='combine_context_and_word')
+        #combined = Dropout(0.3)(combined)
 
         #decoder, hidden1, hidden2 = CuDNNLSTM(self.decoder_lstm_units, return_sequences=False, kernel_initializer='he_uniform', return_state=True, name='decode_context_and_word')(combined)
         #decoder = RepeatVector(1, name='add_time_dim_for_decoder')(decoder)
-        decoder, h1, h2 = CuDNNLSTM(self.decoder_lstm_units, return_sequences=False, return_state=True, stateful=True)(context_vector)
-        output = Dense(self.vocab_size, activation=None, name='equation')(decoder)
+        decoder, h1 = CuDNNGRU(self.decoder_lstm_units, return_sequences=False, return_state=True, stateful=True)(context_vector)
+        output = Dense(self.vocab_size, activation=None, name='next_token')(decoder)
         
-        model = Model(inputs=[image_input, last_token], outputs=[output], name=self.name)
+        if visualize:
+            model = Model(inputs=[image_input, last_token], outputs=[output, attention], name=self.name)
+        else:
+            model = Model(inputs=[image_input, last_token], outputs=[output], name=self.name)
         self.model = model
 
     def predict(self, image):

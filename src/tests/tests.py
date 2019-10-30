@@ -4,7 +4,7 @@ sys.path.append("..")
 import os
 import unittest
 import numpy as np
-from data import create_data
+from create_data import create_data
 
 def delete_temp_file(file_name):
     '''
@@ -17,7 +17,7 @@ def delete_temp_file(file_name):
 
 class create_data_Tests(unittest.TestCase):
     def setUp(self):
-        self.creator = create_data((128,1024), 'output.csv', 'output', 'test_formulas.txt')
+        self.creator = create_data((32,512), 'output.csv', 'output', 'test_formulas.txt')
    
     def test_single_latex_to_image(self):
         latex_equation = r"\frac{x^2}{2y}"

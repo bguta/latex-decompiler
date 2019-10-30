@@ -71,7 +71,7 @@ class create_data:
         full_len = len(formulas)
 
         dataset = {'image_name': [], 'latex_equations': []}
-        with click.progressbar(range(50000)) as bar:
+        with click.progressbar(range(10**4)) as bar:
             for i in bar:
                 try:
                     im_name = str(uuid.uuid4().hex) + '.png'

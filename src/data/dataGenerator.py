@@ -6,6 +6,14 @@ import tensorflow.keras as keras
 from PIL import Image, ImageOps
 import io
 from sympy import preview
+from albumentations import CropNonEmptyMaskIfExists, Compose
+
+def get_augmentations(p=1.0, h=128, w=1024):
+    augmentations = Compose([
+        CropNonEmptyMaskIfExists(height=h, width=w, p=1.0),
+    ], p=p)
+
+    return augmentations
 
 def encode_equation(string, vocab_list, dim):
     encoding = np.zeros((dim[0], dim[1]))
@@ -29,6 +37,20 @@ def encode_ctc_equation(string, vocab_list):
     #encoding += [0]*(dim[0] - len(encoding))
     return np.array(encoding, dtype=np.float32)
 
+def crop_im(im, padding=0.1):
+    '''
+    Take in a black and white image and crop to region
+    contating white (1.0) and pad with % padding
+    '''
+    rows, cols = im.shape[:-1]
+    non_empty_columns = np.where(im.max(axis=0)>0)[0]
+    non_empty_rows = np.where(im.max(axis=1)>0)[0]
+    if len(non_empty_columns) == 0 or len(non_empty_rows) == 0:
+        return im
+    cropBox = (min(non_empty_rows * (1 - padding)), min(max(non_empty_rows * (1 + padding)), rows),
+                min(non_empty_columns * (1 - padding)), min(max(non_empty_columns * (1 + padding)), cols))
+    cropped = im[int(cropBox[0]):int(cropBox[1])+1, int(cropBox[2]):int(cropBox[3])+1 , :]
+    return cropped
 
 class generator(keras.utils.Sequence):
     '''
@@ -116,18 +138,22 @@ class generator(keras.utils.Sequence):
 
 
             img = self.__load_grayscale(img_path)
+            img = self.preprocess(img)
+            img = np.expand_dims(img, axis=-1)
+            #img = crop_im(img)
             raw_equation = image_df.latex_equations.values[0]
             encoded_equation = encode_ctc_equation(raw_equation, self.vocab_list)
+            encoded_equation = encoded_equation.reshape(len(encoded_equation),1)
             #time_seq_equations = self.__make_time_seq(encoded_equation, self.eq_dim[0])
             img = np.expand_dims(img, axis=0)
-            img = self.preprocess(img)
+            #img = self.preprocess(img)
             #img = np.repeat(img, 3, axis=-1)
 
             #for time_step in range(len(encoded_equation) - 1):
             batch = len(encoded_equation)-1
-            X = [np.repeat(img, batch, axis=0), encoded_equation[:-1]]
+            X = [np.repeat(img, batch, axis=0), encoded_equation[:-1,:]]
             
-            Y = encoded_equation[1:]
+            Y = encoded_equation[1:,:]
         return X, Y
 
 
@@ -143,6 +169,14 @@ class generator(keras.utils.Sequence):
         return matrix
 
     def __load_grayscale(self, img_path):
+        '''
+        Load the image as a numpy array
+        '''
+        img = ImageOps.invert(Image.open(img_path).convert('L'))
+        image = np.array(img, dtype=np.float32)
+        return image
+
+    def __load_rgb(self, img_path):
         '''
         Load the image as a numpy array
         '''

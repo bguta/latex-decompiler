@@ -21,7 +21,7 @@ tf_graph = tf.get_default_graph()
 #import segmentation_models as sm
 
 def create_dataset():
-    creator = create_data(image_size=(128,1024), 
+    creator = create_data(image_size=(32,416), 
                 output_csv='data/dataset.csv', 
                 output_dir='data/images', 
                 formula_file='data/formulas.txt')
@@ -35,7 +35,7 @@ def create_vocabset():
         all_tokens += token_set
     
     unique_tokens = np.insert(np.unique(all_tokens), 0, '')
-    with open('vocab_.txt', 'w') as f:
+    with open('vocab_8k.txt', 'w') as f:
         f.write('\n'.join(unique_tokens))
 
 
@@ -71,6 +71,10 @@ def generate_data(generator, model):
         X,y = generator.__getitem__(i)
         steps = len(y)
         batchs = steps // batch_size
+        if steps == 0:
+            i = 0
+            generator.on_epoch_end()
+            continue
         if batchs <= 0:
             batchs = 1
         imgs = np.array_split(X[0], batchs)
@@ -85,29 +89,26 @@ def generate_data(generator, model):
             with tf_session.as_default():
                 with tf_graph.as_default():
                     model.reset_states()
-        if i > epoch_len:
-            i = 0
-            generator.on_epoch_end()
 def train():
     # hyperparameters + files
     DATA_DIR = 'data/'
     IMAGE_DIR = DATA_DIR + 'images/'
     DATASET = 'dataset.csv'
     MODEL_DIR = DATA_DIR + 'saved_model/'
-    VOCAB = 'vocab_50k.txt'
+    VOCAB = 'vocab_8k.txt'
     BATCH_SIZE = 1
     EPOCHS = 130
     START_EPOCH = 0
-    IMAGE_DIM = (128, 1024)
+    IMAGE_DIM = (32,416)
     load_saved_model = False
     max_equation_length = 659 + 2 # 659 tokens + the 2 start/end tokens
-    encoder_lstm_units = 128
+    encoder_lstm_units = 256
     decoder_lstm_units = 512
 
 
     # import the equations + image names and the tokens
     dataset = pd.read_csv(DATA_DIR+DATASET)
-    #dataset = dataset.head(20)
+    dataset = dataset.head(20)
     vocabFile = open(DATA_DIR+VOCAB, 'r', encoding="utf8")
     vocab_tokens = [x.replace('\n', '') for x in vocabFile.readlines()]
     vocabFile.close()
@@ -145,9 +146,9 @@ def train():
     latex_model = im2latex(encoder_lstm_units, decoder_lstm_units, vocab_tokens)
     model = latex_model.model
     if load_saved_model:
-        print('Loaded Model')
-        model.load_weights(MODEL_DIR + latex_model.name + '.h5')
-    model.compile(optimizer=Nadam(lr=1e-3), loss=ce, metrics=[acc])
+        print('Loading Model')
+        model.load_weights(MODEL_DIR + latex_model.name + '.h5', by_name=True)
+    model.compile(optimizer=Nadam(lr=1e-4), loss=ce, metrics=[acc])
     model.summary()
     #plot_model(model, to_file='model.png')
     input()
@@ -162,8 +163,8 @@ def train():
         save_weights_only=True,
         mode='max'
     )
-    reduce_lr = ReduceLROnPlateau(monitor='val_acc', factor=0.7,
-                              patience=5, min_lr=1e-10, verbose=1)
+    reduce_lr = ReduceLROnPlateau(monitor='acc', factor=0.95,
+                              patience=3, min_lr=1e-10, verbose=1)
     def scheduler(epoch, lr):
         return lr*0.95       
     lr_schedule = LearningRateScheduler(scheduler, verbose=1)
@@ -172,9 +173,9 @@ def train():
     # train
     history = model.fit_generator(
         generate_data(train_generator, model),
-        steps_per_epoch=20000,
+        steps_per_epoch=1000,
         validation_data=generate_data(val_generator, model),
-        validation_steps=5000,
+        validation_steps=500,
         callbacks=[nan_stop, checkpoint, reduce_lr, csv_logger, early_stopping],
         workers=1,
         epochs=EPOCHS,
@@ -183,5 +184,6 @@ def train():
     )
 
 if __name__ == '__main__':
+    #create_vocabset()
     #create_dataset()
     train()
