@@ -1,34 +1,20 @@
-import warnings
-warnings.filterwarnings("ignore") # ignore tensorflow warnings
-
 import numpy as np
-import tensorflow.keras as keras
+from torch.utils.data import Dataset
+import torch
 from PIL import Image, ImageOps
 import io
 from sympy import preview
 
-def encode_equation(string, vocab_list, dim):
-    encoding = np.zeros((dim[0], dim[1]))
-    tokens = string.split(' ')
-    tokens_length = len(tokens)
-
-    for i in range(dim[0]):
-        if i < tokens_length:
-            if tokens[i] in vocab_list:
-                encoding[i][vocab_list.index(tokens[i])] = 1.0
-            else:
-                encoding[i][0] = 1.0
-        else:
-            encoding[i][0] = 1.0
-    return encoding
-
-def encode_ctc_equation(string, vocab_list, dim):
+def encode_equation(string, vocab_list, dim, is_for_loss=False):
     encoding = [vocab_list.index(x) if x in vocab_list else 0 for x in string.split(' ')]
-    encoding += [0]*(dim[0] - len(encoding))
+    if not is_for_loss:
+        encoding.insert(0, len(vocab_list) - 2) # insert the start token
+    encoding += [len(vocab_list) - 1] # insert the end token
+    encoding += [0]*(dim - len(encoding)) # pad the rest
     return np.array(encoding)
 
 
-class generator(keras.utils.Sequence):
+class generator(Dataset):
     '''
     Generator class to feed the training data
 
@@ -41,7 +27,6 @@ class generator(keras.utils.Sequence):
     def __init__(self,
                 list_IDs,
                 df,
-                target_df,
                 dim,
                 eq_dim,
                 batch_size,
@@ -49,11 +34,10 @@ class generator(keras.utils.Sequence):
                 preprocess,
                 vocab_list,
                 shuffle=True,
-                n_channels=1):
+                n_channels=3):
         
         self.list_IDs       = list_IDs
         self.df             = df
-        self.target_df      = target_df
         self.dim            = dim
         self.eq_dim         = eq_dim
         self.batch_size     = batch_size
@@ -82,31 +66,38 @@ class generator(keras.utils.Sequence):
             np.random.shuffle(self.indexes)
 
     def __generate_seq(self, list_IDs_batch):
-        X = np.empty((self.batch_size, *self.dim, self.n_channels), dtype=np.float32)
-        Y = np.empty((self.batch_size, *self.eq_dim), dtype=np.float32)
-        #Y = np.empty((self.batch_size, self.eq_dim[0]), dtype=np.float32)
+        X         = np.empty((self.batch_size, self.n_channels, *self.dim), dtype=np.float32)
+        Y         = np.zeros((self.batch_size, self.eq_dim), dtype=np.int64)
+        Y_forLoss = np.zeros((self.batch_size, self.eq_dim), dtype=np.int64)
 
         for i, ID in enumerate(list_IDs_batch):
             im_name = self.df['image_name'].loc[ID]
-            image_df = self.target_df[self.target_df['image_name'] == im_name]
+            image_df = self.df[self.df['image_name'] == im_name]
             img_path = f"{self.base_path}/{im_name}"
 
 
-            img = self.__load_grayscale(img_path)
+            img = self.__load_img(img_path)
             raw_equation = image_df.latex_equations.values[0]
             encoded_equation = encode_equation(raw_equation, self.vocab_list, self.eq_dim)
+            encoded_equation_loss = encode_equation(raw_equation, self.vocab_list, self.eq_dim, is_for_loss=True)
 
             img = self.preprocess(img)
+            # swap color axis because
+            # numpy image: H x W x C
+            # torch image: C X H X W
+            img = img.transpose((2, 0, 1))
+ 
 
-            X[i, ] = np.expand_dims(img, axis=-1)
-            Y[i, ] = encoded_equation
+            X[i, ]    = img
+            Y[i, ]    = encoded_equation
+            Y_forLoss[i, ] = encoded_equation_loss
 
-        return X, Y
+        return [torch.from_numpy(X), torch.from_numpy(Y), torch.from_numpy(Y_forLoss)]
 
-    def __load_grayscale(self, img_path):
+    def __load_img(self, img_path):
         '''
         Load the image as a numpy array
         '''
-        img = ImageOps.invert(Image.open(img_path).convert('L'))
+        img = ImageOps.invert(Image.open(img_path).convert('RGB'))
         gray_image = np.array(img)
         return gray_image

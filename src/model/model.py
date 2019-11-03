@@ -73,7 +73,7 @@ class im2latex(nn.Module):
         self.W_1 = nn.Linear(self.encoder_lstm_units, self.encoder_lstm_units, bias=False)
         self.W_2 = nn.Linear(self.decoder_lstm_units, self.encoder_lstm_units, bias=False)
 
-        self.W_3 = nn.Linear(self.decoder_lstm_units+self.embedding_size, self.decoder_lstm_units, bias=False)
+        self.W_3 = nn.Linear(self.decoder_lstm_units+self.encoder_lstm_units, self.decoder_lstm_units, bias=False)
         self.W_out = nn.Linear(self.decoder_lstm_units, self.vocab_size, bias=False)
 
         self.add_pos_feat = False
