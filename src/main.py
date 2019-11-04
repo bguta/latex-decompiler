@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from model.model import im2latex
 from model.trainer import Trainer
 from data.dataGenerator import generator
+from torch.utils.data import DataLoader
 
 def create_dataset():
     creator = create_data(image_size=(128,1024), 
@@ -38,7 +39,7 @@ def train():
     MODEL_DIR = DATA_DIR + 'saved_model'
     VOCAB = 'vocab_8k.txt'
     BATCH_SIZE = 13
-    EPOCHS = 10
+    EPOCHS = 30
     START_EPOCH = 0
     IMAGE_DIM = (32, 416)
     load_saved_model = True
@@ -80,13 +81,14 @@ def train():
     
     # initialize our model
     model = im2latex(vocab_size)
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = optim.Adam(model.parameters(), lr=1e-5)
+    lr_schedule = None
     if load_saved_model:
         checkpoint = torch.load(MODEL_DIR + '/best_ckpt.pt')
         model.load_state_dict(checkpoint['model_state_dict'])
         model.cuda()
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        START_EPOCH = checkpoint['epoch']
+        #optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        START_EPOCH = checkpoint['epoch'] + 1
         print('Loaded weights')
 
     def loss_fn(gt, pr):
@@ -114,6 +116,7 @@ def train():
                     train_generator=train_generator,
                     val_generator=val_generator,
                     model_path=MODEL_DIR,
+                    lr_scheduler=lr_schedule,
                     init_epoch=START_EPOCH,
                     num_epochs=EPOCHS)
     trainer.train()

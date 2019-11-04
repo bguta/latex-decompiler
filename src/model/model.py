@@ -81,7 +81,7 @@ class im2latex(nn.Module):
         self.uniform = Uniform(0, 1)
     
     def encode(self, imgs):
-        encoded_imgs = self.cnn_encoder(imgs)  # [Bactchs, encoder_size, H', W']
+        encoded_imgs = self.cnn_encoder(imgs)  # [Batchs, encoder_size, H', W']
         encoded_imgs = encoded_imgs.permute(0, 2, 3, 1)  # [Batchs, H', W', encoder_size]
         B, H, W, _ = encoded_imgs.shape
         encoded_imgs = encoded_imgs.contiguous().view(B, H*W, -1)

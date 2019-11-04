@@ -9,15 +9,7 @@ class Trainer():
     A trainer for the neural network on the gpu
 
     # Arguments
-        optimizer
-        loss_fn
-        model
-        lr_schedule
-        train_generator
-        val_generator
-        model_path
-        init_epoch
-        num_epochs
+
     # Example
     """
     def __init__(self,
@@ -27,14 +19,15 @@ class Trainer():
                 train_generator,
                 val_generator,
                 model_path,
-                lr_schedule=None,
+                lr_scheduler=None,
                 init_epoch=1,
+                best_val_loss=np.inf,
                 num_epochs=10):
             
         self.optimizer = optimizer
         self.loss_fn = loss_fn
         self.model = model
-        self.lr_schedule = lr_schedule
+        self.lr_scheduler = lr_scheduler
         self.train_generator = train_generator
         self.val_generator = val_generator
         self.model_path = model_path
@@ -43,13 +36,13 @@ class Trainer():
         self.final_epoch = self.epoch + num_epochs
         self.step = 0
         self.total_step = 0
-        self.best_val_loss = np.inf
+        self.best_val_loss = best_val_loss
         self.device = torch.device('cuda')
-        self.epsilon = 0.9
+        self.epsilon = 0.95
         self.model.to(self.device)
     
     def train(self):
-        epoch_stats = "Epoch {}, step:{}/{} {:.2f}%, Loss:{:.4f}"
+        epoch_stats = "Epoch {}, step: {}/{} {:.2f}%, Loss: {:.4f}"
         print_freq = 32
 
         while self.epoch <= self.final_epoch:
@@ -75,14 +68,14 @@ class Trainer():
             val_loss = self.validate()
             # self.lr_schedule.step(val_loss)
 
-            self.save_model('ckpt-{}-{:.4f}'.format(self.epoch, val_loss))
+            self.save_model('ckpt-{}-{:.4f}.pt'.format(self.epoch, val_loss))
             self.epoch += 1
             self.step = 0
         return
     def validate(self):
         self.model.eval()
         val_total_loss = 0.0
-        epoch_stats = "Epoch {}, validation loss:{:.4f}"
+        epoch_stats = "Epoch {}, validation loss: {:.4f}"
 
         # run the prediction with no grad acumulation
         with torch.no_grad():
@@ -94,6 +87,8 @@ class Trainer():
             print(epoch_stats.format(self.epoch, avg_loss))
 
         if avg_loss < self.best_val_loss:
+            print('val loss improved from {:.4f} to {:.4f}'.format(self.best_val_loss, avg_loss))
+            self.epsilon = self.epsilon*0.95
             self.best_val_loss = avg_loss
             self.save_model('best_ckpt.pt')
         return avg_loss
@@ -108,6 +103,7 @@ class Trainer():
         loss = self.loss_fn(loss_targets, logits)
         loss.backward()
         self.step += 1
+        self.total_step += 1
         self.optimizer.step()
 
         return loss.item()
@@ -133,5 +129,6 @@ class Trainer():
             'epoch': self.epoch,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
+            'best_val_loss': self.best_val_loss
         }, save_path)
 
