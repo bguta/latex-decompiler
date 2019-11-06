@@ -24,3 +24,19 @@ Expected:   \pi _ { p } ( s _ { 2 } ) \psi = - \frac { \hbar } 2 \psi \; \; \\ma
 
 Predicted:  \pi _ { p } ( s _ { 2 } ) \psi = - \frac { \hbar } { 2 } \psi ~ \\mathrm { i } f ~ \mathrm { i f ~ } ~ \psi \in { \bf C } ^ { - }
 ```
+
+Here is another example where it becomes confused when similar symbols occur multiple times in different places
+
+The original image
+
+![](src/model_outputs/attention_plots/att-2.png)
+
+The attention at each step
+
+![](src/model_outputs/attention_plots/att-2.gif)
+
+```
+Expected:   d s ^ { ' 2 } = \frac { 1 } { \operatorname { c o s h } ^ { 2 } \alpha } d s ^ { 2 } \, .
+
+Predicted:  d s ^ { 2 } = \frac { 1 } { \operatorname { c o s h } ^ { 2 } \alpha } d s ^ { 2 } \, .
+```

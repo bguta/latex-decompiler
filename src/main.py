@@ -11,7 +11,7 @@ from data.generator import generator
 from torch.utils.data import DataLoader
 
 def create_dataset():
-    creator = create_data(image_size=(128,1024), 
+    creator = create_data(image_size=(32, 416), 
                 output_csv='data/dataset.csv', 
                 output_dir='data/images', 
                 formula_file='data/formulas.txt')

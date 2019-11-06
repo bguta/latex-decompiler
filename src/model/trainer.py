@@ -95,7 +95,7 @@ class Trainer():
 
         if avg_loss < self.best_val_loss:
             print('val loss improved from {:.4f} to {:.4f}'.format(self.best_val_loss, avg_loss))
-            self.epsilon = self.epsilon*0.95
+            #self.epsilon = self.epsilon*0.95
             self.best_val_loss = avg_loss
             self.save_model('best_ckpt.pt')
         return avg_loss

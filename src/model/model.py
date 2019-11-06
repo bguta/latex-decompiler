@@ -65,6 +65,7 @@ class im2latex(nn.Module):
             nn.ReLU()
         )
 
+        # token_decoder/encoder
         self.rnn_decoder = nn.LSTMCell(self.decoder_lstm_units+self.embedding_size, self.decoder_lstm_units)
         self.embedding = nn.Embedding(self.vocab_size, self.embedding_size)
 
@@ -81,23 +82,22 @@ class im2latex(nn.Module):
         self.W_3 = nn.Linear(self.decoder_lstm_units+self.encoder_lstm_units, self.decoder_lstm_units, bias=False)
         self.W_out = nn.Linear(self.decoder_lstm_units, self.vocab_size, bias=False)
 
-        self.add_pos_feat = False
         self.dropout = nn.Dropout(p=dropout)
         self.uniform = Uniform(0, 1)
     
     def encode(self, imgs):
-        encoded_imgs = self.cnn_encoder(imgs)  # [Batchs, encoder_size, H', W']
-        encoded_imgs = encoded_imgs.permute(0, 2, 3, 1)  # [Batchs, H', W', encoder_size]
+        encoded_imgs = self.cnn_encoder(imgs)  # [Batchs, encoder_units, H', W']
+        encoded_imgs = encoded_imgs.permute(0, 2, 3, 1)  # [Batchs, H', W', encoder_units]
         B, H, W, _ = encoded_imgs.shape
-        encoded_imgs = encoded_imgs.contiguous().view(B, H*W, -1)
+        encoded_imgs = encoded_imgs.contiguous().view(B, H*W, -1) # [Batchs, H' x W', encoder_units]
         return encoded_imgs
         
     def init_decoder(self, enc_out):
         """args:
             enc_out: the output of row encoder [B, H*W, C]
           return:
-            h_0, c_0:  h_0 and c_0's shape: [B, dec_rnn_h]
-            init_O : the average of enc_out  [B, dec_rnn_h]
+            h_0, c_0:  h_0 and c_0's shape: [B, dec_units]
+            init_O : the average of enc_out  [B, dec_units]
             for decoder
         """
         mean_enc_out = enc_out.mean(dim=1)
@@ -119,7 +119,7 @@ class im2latex(nn.Module):
         """Attention mechanism
         args:
             encoder_output: row encoder's output [B, L=H*W, C]
-            h_t: the current time step hidden state [B, dec_rnn_h]
+            h_t: the current time step hidden state [B, dec_units]
         return:
             context: this time step context [B, C]
             attn_scores: Attention scores
