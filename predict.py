@@ -1,4 +1,4 @@
-import torchvision as tv
+import torchvision.transforms.functional as tv
 from PIL import Image, ImageOps
 import argparse
 from model.model import im2latex
@@ -40,8 +40,9 @@ def load_img(im_path, im_size=(32,416)):
     '''
     img = ImageOps.invert(Image.open(im_path).convert('RGB'))
     pad_dim = cal_shape(*img.size)
-    padded_img = tv.transforms.functional.pad(img, pad_dim)
-    processed_img = tv.transforms.functional.resize(padded_img, im_size)
+    processed_img = tv.pad(img, pad_dim)
+    processed_img = tv.resize(processed_img, im_size)
+    processed_img = tv.to_tensor(processed_img)
     return processed_img
 
 def decode(prediction, vocab_list):
