@@ -7,7 +7,7 @@ from torch import nn, optim
 import torch.nn.functional as F
 from model.model import im2latex
 from model.trainer import Trainer
-from data.dataGenerator import generator
+from data.generator import generator
 from torch.utils.data import DataLoader
 
 def create_dataset():

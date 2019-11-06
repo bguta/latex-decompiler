@@ -4,7 +4,7 @@ A Neural Network to convert images of compiled latex equations into their corrse
 
 ## Background
 
-There has been much interest in the conversion of images of mathematical formula into their representive formula. Recently, a commercial tool in the form of [Mathpix](https://mathpix.com/), has been implemented to solve this problem. This work is dedicated to recreating that tool with the help of this [paper](https://arxiv.org/pdf/1609.04938v1.pdf).
+There has been much interest in the conversion of images of mathematical formula into their latex representation. Recently, a commercial tool in the form of [mathpix](https://mathpix.com/), has been implemented to solve this problem. This work is dedicated to recreating that tool with the help of this [paper](https://arxiv.org/pdf/1609.04938v1.pdf).
 
 ## The Model
 ### Attention Plots

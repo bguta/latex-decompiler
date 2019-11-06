@@ -7,7 +7,7 @@ from torch import nn, optim
 import torch.nn.functional as F
 from model.model import im2latex
 from model.trainer import Trainer
-from data.dataGenerator import generator
+from data.generator import generator
 from sympy import preview
 import matplotlib.pyplot as plt
 from torchsummary import summary
