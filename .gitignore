@@ -2,5 +2,5 @@
 *.txt
 *.h5
 *.png
-*.lst
+*.pt
 *.pyc

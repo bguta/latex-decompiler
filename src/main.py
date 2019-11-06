@@ -3,10 +3,10 @@ import pandas as pd
 import sympy as sy
 from sklearn.model_selection import train_test_split
 import torch
-from torch import nn, optim
-import torch.nn.functional as F
+from torch import optim
 from model.model import im2latex
 from model.trainer import Trainer
+from model.metrics import loss_fn
 from data.generator import generator
 from torch.utils.data import DataLoader
 
@@ -81,12 +81,12 @@ def train():
     
     # initialize our model
     model = im2latex(vocab_size)
-    optimizer = optim.Adam(model.parameters(), lr=1e-5)
+    optimizer = optim.Adam(model.parameters(), lr=5e-6)
     lr_schedule = None
     epsilon = 1.0
     best_val_loss = np.inf
     if load_saved_model:
-        checkpoint = torch.load(MODEL_DIR + '/ckpt-21-0.6318.pt')
+        checkpoint = torch.load(MODEL_DIR + '/ckpt-32-0.6236.pt')
         model.load_state_dict(checkpoint['model_state_dict'])
         model.cuda()
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -94,25 +94,6 @@ def train():
         best_val_loss = checkpoint['best_val_loss']
         epsilon = checkpoint['epsilon']
         print('Loaded weights')
-
-    def loss_fn(gt, pr):
-        """
-        pr: probability distribution return by model
-                [B, MAX_LEN, voc_size]
-        gt: target formulas
-                [B, MAX_LEN]
-        """
-        padding = torch.ones_like(gt) * 0
-        mask = (gt != padding)
-        targets = gt.masked_select(mask)
-        logits = pr.masked_select(
-        mask.unsqueeze(2).expand(-1, -1, pr.size(2))
-        ).contiguous().view(-1, pr.size(2))
-        logits = torch.log(logits)
-        assert logits.size(0) == targets.size(0), f"{logits.size()} and {targets.size()} are incompatible"
-        assert targets.nelement() != 0, f"targets is empty {targets}"
-        loss = F.nll_loss(input=logits, target=targets)
-        return loss
 
     trainer = Trainer(optimizer=optimizer,
                     loss_fn=loss_fn,
