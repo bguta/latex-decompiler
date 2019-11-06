@@ -3,6 +3,7 @@ import os
 import torch
 from torch.nn.utils import clip_grad_norm_
 import numpy as np
+from tqdm import tqdm, trange
 
 class Trainer():
     """
@@ -21,6 +22,7 @@ class Trainer():
                 model_path,
                 lr_scheduler=None,
                 init_epoch=1,
+                epsilon=0.95,
                 best_val_loss=np.inf,
                 num_epochs=10):
             
@@ -38,31 +40,36 @@ class Trainer():
         self.total_step = 0
         self.best_val_loss = best_val_loss
         self.device = torch.device('cuda')
-        self.epsilon = 0.95
+        self.epsilon = epsilon
         self.model.to(self.device)
     
     def train(self):
         epoch_stats = "Epoch {}, step: {}/{} {:.2f}%, Loss: {:.4f}"
+        print('Starting to Train')
         print_freq = 32
 
         while self.epoch <= self.final_epoch:
             self.model.train()
             losses = 0.0
-            for index in range(len(self.train_generator)):
+            #with click.progressbar(range(len(self.train_generator)), label=f'Epoch: {self.epoch}/{self.final_epoch}') as bar:
+            loop = trange(len(self.train_generator), ascii=" #")
+            loop.set_description(f'Epoch: {self.epoch}/{self.final_epoch}')
+            for index in loop:
                 imgs, targets, loss_targets = self.train_generator.__getitem__(index)
                 step_loss = self.train_step(imgs, targets, loss_targets)
                 losses += step_loss
-
+                avg_loss = losses/(index+1)
+                loop.set_postfix(loss=avg_loss)
                 # log message
-                if self.step % print_freq == 0:
-                    #self.epsilon *= 0.95
-                    avg_loss = losses / print_freq
-                    print(epoch_stats.format(
-                        self.epoch, self.step, len(self.train_generator),
-                        100 * self.step / len(self.train_generator),
-                        avg_loss
-                    ), end="\r")
-                    losses = 0.0
+                # if self.step % print_freq == 0:
+                #     #self.epsilon *= 0.95
+                #     avg_loss = losses / print_freq
+                #     # print(epoch_stats.format(
+                #     #     self.epoch, self.step, len(self.train_generator),
+                #     #     100 * self.step / len(self.train_generator),
+                #     #     avg_loss
+                #     # ))
+                #     losses = 0.0
             self.train_generator.on_epoch_end()
             # calc val
             val_loss = self.validate()
@@ -129,6 +136,7 @@ class Trainer():
             'epoch': self.epoch,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
-            'best_val_loss': self.best_val_loss
+            'best_val_loss': self.best_val_loss,
+            'epsilon': self.epsilon
         }, save_path)
 

@@ -38,12 +38,12 @@ def train():
     DATASET = 'dataset.csv'
     MODEL_DIR = DATA_DIR + 'saved_model'
     VOCAB = 'vocab_8k.txt'
-    BATCH_SIZE = 13
-    EPOCHS = 30
+    BATCH_SIZE = 8
+    EPOCHS = 10
     START_EPOCH = 0
     IMAGE_DIM = (32, 416)
     load_saved_model = True
-    max_equation_length = 659
+    max_equation_length = 232 + 2
 
     # import the equations + image names and the tokens
     dataset = pd.read_csv(DATA_DIR+DATASET)
@@ -83,12 +83,16 @@ def train():
     model = im2latex(vocab_size)
     optimizer = optim.Adam(model.parameters(), lr=1e-5)
     lr_schedule = None
+    epsilon = 1.0
+    best_val_loss = np.inf
     if load_saved_model:
-        checkpoint = torch.load(MODEL_DIR + '/best_ckpt.pt')
+        checkpoint = torch.load(MODEL_DIR + '/ckpt-21-0.6318.pt')
         model.load_state_dict(checkpoint['model_state_dict'])
         model.cuda()
-        #optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         START_EPOCH = checkpoint['epoch'] + 1
+        best_val_loss = checkpoint['best_val_loss']
+        epsilon = checkpoint['epsilon']
         print('Loaded weights')
 
     def loss_fn(gt, pr):
@@ -118,6 +122,8 @@ def train():
                     model_path=MODEL_DIR,
                     lr_scheduler=lr_schedule,
                     init_epoch=START_EPOCH,
+                    epsilon=epsilon,
+                    best_val_loss=best_val_loss,
                     num_epochs=EPOCHS)
     trainer.train()
 

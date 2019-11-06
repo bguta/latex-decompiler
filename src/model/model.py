@@ -43,20 +43,25 @@ class im2latex(nn.Module):
         # encoder
         self.cnn_encoder = nn.Sequential(
             nn.Conv2d(3, 64, 3, 1, 1),
+            #nn.BatchNorm2d(num_features=64),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2, 1),
+            nn.MaxPool2d(2, 2, 0),
 
             nn.Conv2d(64, 128, 3, 1, 1),
+            #nn.BatchNorm2d(num_features=128),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2, 1),
+            nn.MaxPool2d((1,2), (1,2), 0), # nn.MaxPool2d(2, 2, 1),
 
             nn.Conv2d(128, 256, 3, 1, 1),
+            nn.BatchNorm2d(num_features=256),
             nn.ReLU(),
             nn.Conv2d(256, 256, 3, 1, 1),
+            #nn.BatchNorm2d(num_features=256),
             nn.ReLU(),
-            nn.MaxPool2d((2, 1), (2, 1), 0),
+            nn.MaxPool2d((2,1), (2,1), 0),
 
             nn.Conv2d(256, self.encoder_lstm_units, 3, 1, 0),
+            #nn.BatchNorm2d(num_features=self.encoder_lstm_units),
             nn.ReLU()
         )
 
@@ -125,6 +130,7 @@ class im2latex(nn.Module):
         alpha = F.softmax(alpha, dim=-1)  # [B, L]
 
         # cal context: [B, C]
+        # multiply the weights of each batch with the encoded img
         context = torch.bmm(alpha.unsqueeze(1), encoder_output)
         context = context.squeeze(1)
         return context, alpha
@@ -148,7 +154,7 @@ class im2latex(nn.Module):
         # calculate logit
         logit = F.softmax(self.W_out(output_t), dim=1)  # [B, out_size]
 
-        return (h_t, c_t), output_t, logit
+        return (h_t, c_t), output_t, logit, attn_scores
 
     def forward(self, imgs, formulas, epsilon=1.):
         """args:
@@ -165,14 +171,16 @@ class im2latex(nn.Module):
         dec_states, o_t = self.init_decoder(encoded_imgs)
         max_len = formulas.size(1)
         logits = []
+        attention = []
         for t in range(max_len):
             target = formulas[:, t:t+1]
             # schedule sampling
             if logits and self.uniform.sample().item() > epsilon:
                 target = torch.argmax(torch.log(logits[-1]), dim=1, keepdim=True)
             # ont step decoding
-            dec_states, o_t, logit = self.step_decoding(
+            dec_states, o_t, logit, attn_scores = self.step_decoding(
                 dec_states, o_t, encoded_imgs, target)
             logits.append(logit)
+            attention.append(attn_scores)
         logits = torch.stack(logits, dim=1)  # [B, MAX_LEN, out_size]
-        return logits
+        return logits #, attention

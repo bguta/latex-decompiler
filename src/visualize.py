@@ -10,6 +10,7 @@ from model.trainer import Trainer
 from data.dataGenerator import generator
 from sympy import preview
 import matplotlib.pyplot as plt
+from torchsummary import summary
 
 
 def decode(token_ids, vocab_list):
@@ -18,17 +19,43 @@ def decode(token_ids, vocab_list):
     return decoded_string.strip()
 
 def decode_equation(encoding, vocab_list):
-    token_ids = np.argmax(encoding, axis=-1)
+    token_ids = np.argmax(np.log(encoding), axis=-1)
     return decode(token_ids, vocab_list)
+
+def beam_search_decoder(data, k):
+    sequences = [[ [], 1.0 ]]
+    # walk over each step in sequence
+    for row in data:
+        all_candidates = []
+        # expand each current candidate
+        for i in range(len(sequences)):
+            seq, score = sequences[i]
+            for j in range(len(row)):
+                candidate = [seq + [j], score * -np.log(row[j])]
+                all_candidates.append(candidate)
+        # order all candidates by score
+        ordered = sorted(all_candidates, key=lambda x:x[1])
+        # select k best
+        sequences = ordered[:k]
+    return sequences
+
+def plot_att(img, atts, predicted, reshape=(6, 102)):
+    for index, att in enumerate(atts):
+        #print(f'{predicted[index]}')
+        plt.axis('off')
+        im_plt = plt.imshow(np.squeeze(img))
+        plt.axis('off')
+        plt.imshow(np.resize(np.squeeze(att.detach().numpy()), reshape), cmap='gray', alpha=0.6, extent=im_plt.get_extent())
+        plt.title(f'Predicted {predicted[index]}')
+        plt.show()
 
 def preprocess_tex(tex):
     split = tex.split('<end>')
     processed_tex = split[0].strip()
     return processed_tex
 
-def show_latex(tex):
+def show_tex(tex):
     preview(f'${tex}$', viewer='file', filename='output.png', euler=False)
-
 
 def preprocess(x):
     return x/255.
@@ -44,7 +71,7 @@ EPOCHS = 1
 START_EPOCH = 0
 IMAGE_DIM = (32, 416)
 load_saved_model = True
-max_equation_length = 659
+max_equation_length = 232 + 2
 
 
 # import the equations + image names and the tokens
@@ -86,3 +113,4 @@ if load_saved_model:
     print('Loading weights')
     checkpoint = torch.load(MODEL_DIR + 'best_ckpt.pt')
     model.load_state_dict(checkpoint['model_state_dict'])
+model.eval()
