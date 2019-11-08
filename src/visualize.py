@@ -5,6 +5,7 @@ from sklearn.model_selection import train_test_split
 import torch
 from torch import nn, optim
 import torch.nn.functional as F
+import torchvision.transforms.functional as tv
 from model.model import im2latex
 from model.trainer import Trainer
 from data.generator import generator
@@ -57,21 +58,18 @@ def preprocess_tex(tex):
 def show_tex(tex):
     preview(f'${tex}$', viewer='file', filename='output.png', euler=False)
 
-def preprocess(x):
-    return x/255.
-
 # hyperparameters + files
 DATA_DIR = 'data/'
 IMAGE_DIR = DATA_DIR + 'images/'
 DATASET = 'dataset.csv'
 MODEL_DIR = DATA_DIR + 'saved_model/'
-VOCAB = 'vocab_8k.txt'
+VOCAB = 'vocab.txt'
 BATCH_SIZE = 1
 EPOCHS = 1
 START_EPOCH = 0
-IMAGE_DIM = (32, 416)
+IMAGE_DIM = (128, 416)
 load_saved_model = True
-max_equation_length = 232 + 2
+max_equation_length = 200 + 2
 
 
 # import the equations + image names and the tokens
@@ -91,10 +89,9 @@ train_generator = generator(list_IDs=train_idx,
             eq_dim=max_equation_length,
             batch_size=BATCH_SIZE,
             base_path=IMAGE_DIR,
-            preprocess=preprocess,
             vocab_list=vocab_tokens,
             shuffle=True,
-            n_channels=3)
+            n_channels=1)
 
 val_generator = generator(list_IDs=val_idx,
             df=dataset,
@@ -102,10 +99,9 @@ val_generator = generator(list_IDs=val_idx,
             eq_dim=max_equation_length,
             batch_size=BATCH_SIZE,
             base_path=IMAGE_DIR,
-            preprocess=preprocess,
             vocab_list=vocab_tokens,
             shuffle=True,
-            n_channels=3)
+            n_channels=1)
 
 # the model
 model = im2latex(vocab_size)

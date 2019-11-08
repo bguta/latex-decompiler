@@ -1,9 +1,10 @@
 import torchvision.transforms.functional as tv
 from PIL import Image, ImageOps
 import argparse
-from model.model import im2latex
+from src.model.model import im2latex
 import torch
 import numpy as np
+import matplotlib.pyplot as plt
 
 def cal_shape(w, h, ratio=13, height_padding=16):
     '''
@@ -16,18 +17,18 @@ def cal_shape(w, h, ratio=13, height_padding=16):
     height_padding: the padding to use for the height, default: 16
 
     ## Returns
-    (new_w, new_h): The new dimensions to pad to.
+    (padding_w, padding_h): The padding for each dim to.
 
     ## Throws asserion error if the padding for the width is negative
     '''
-    if abs(w/h - ratio) < 0.1:
-        return w, h
+    if abs(w/h - ratio) < 0.5:
+        return 0, 0
     pad_h = height_padding
-    pad_w = 13*pad_h + 13*h - w
+    pad_w = ratio*pad_h + ratio*h - w
     assert pad_w >= 0, 'The padding for the width was too small, please provide an image with a smaller aspect ratio'
-    return pad_w + w, pad_h + h
+    return pad_w, pad_h
 
-def load_img(im_path, im_size=(32,416)):
+def load_img(im_path, im_size=(128,416)):
     '''
     Open the *.png image specified in the im_path and prepocess it
     for our model
@@ -39,11 +40,14 @@ def load_img(im_path, im_size=(32,416)):
     ## Returns the processed image as a torch tensor
     '''
     img = ImageOps.invert(Image.open(im_path).convert('RGB'))
-    pad_dim = cal_shape(*img.size)
+    pad_dim = cal_shape(*img.size, ratio=im_size[1]//im_size[0], height_padding=1)
+    print(f'Padding dimension: {pad_dim}')
     processed_img = tv.pad(img, pad_dim)
     processed_img = tv.resize(processed_img, im_size)
     processed_img = tv.to_tensor(processed_img)
-    return processed_img
+    plt.imshow(processed_img.detach().numpy().transpose(1,2,0))
+    plt.show()
+    return processed_img.unsqueeze(0)
 
 def decode(prediction, vocab_list):
     pr = np.squeeze(prediction.detach().numpy())
@@ -67,15 +71,16 @@ def main(model, start_token, vocab_set):
     while True:
         im_path = prompt()
         img = load_img(im_path)
-        encoded_pr = model(img, start_token)
+        encoded_pr = model(img, start_token, 0.0)
         predicted_latex = decode(encoded_pr, vocab_set)
         print(f'Prediction: {predicted_latex}')
+        print('')
 
 if __name__ == '__main__':
-    stored_model = torch.load('best_ckpt.pt')
+    stored_model = torch.load('pre_trained/model.pt')
     max_len = 232 + 2
 
-    vocabFile = open('vocab.txt', 'r', encoding="utf8")
+    vocabFile = open('pre_trained/vocab.txt', 'r', encoding="utf8")
     vocab_tokens = [x.replace('\n', '') for x in vocabFile.readlines()]
     vocabFile.close()
     vocab_size = len(vocab_tokens)

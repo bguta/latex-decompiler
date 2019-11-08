@@ -31,7 +31,6 @@ class generator(Dataset):
                 eq_dim,
                 batch_size,
                 base_path,
-                preprocess,
                 vocab_list,
                 shuffle=True,
                 n_channels=3):
@@ -43,7 +42,6 @@ class generator(Dataset):
         self.batch_size     = batch_size
         self.base_path      = base_path
         self.vocab_list     = vocab_list
-        self.preprocess     = preprocess
         self.shuffle        = shuffle
         self.n_channels     = n_channels
         self.on_epoch_end()
@@ -80,12 +78,6 @@ class generator(Dataset):
             raw_equation = image_df.latex_equations.values[0]
             encoded_equation = encode_equation(raw_equation, self.vocab_list, self.eq_dim)
             encoded_equation_loss = encode_equation(raw_equation, self.vocab_list, self.eq_dim, is_for_loss=True)
-
-            img = self.preprocess(img)
-            # swap color axis because
-            # numpy image: H x W x C
-            # torch image: C X H X W
-            img = img.transpose((2, 0, 1))
  
 
             X[i, ]    = img
@@ -94,10 +86,11 @@ class generator(Dataset):
 
         return [torch.from_numpy(X), torch.from_numpy(Y), torch.from_numpy(Y_forLoss)]
 
-    def __load_img(self, img_path):
+    def __load_img(self, img_path, transform=True):
         '''
         Load the image as a numpy array
         '''
-        img = ImageOps.invert(Image.open(img_path).convert('RGB'))
-        gray_image = np.array(img)
-        return gray_image
+        img = ImageOps.invert(Image.open(img_path).convert('L'))
+        img = np.expand_dims(np.array(img), axis=-1)
+        img = np.expand_dims(img.transpose((2,0,1)), axis=0)/255.
+        return img

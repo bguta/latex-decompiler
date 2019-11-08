@@ -42,11 +42,11 @@ class Trainer():
         self.device = torch.device('cuda')
         self.epsilon = epsilon
         self.model.to(self.device)
+        self.print_freq = 42
     
     def train(self):
         epoch_stats = "Epoch {}, step: {}/{} {:.2f}%, Loss: {:.4f}"
         print('Starting to Train')
-        print_freq = 32
 
         while self.epoch <= self.final_epoch:
             self.model.train()
@@ -54,26 +54,23 @@ class Trainer():
             #with click.progressbar(range(len(self.train_generator)), label=f'Epoch: {self.epoch}/{self.final_epoch}') as bar:
             loop = trange(len(self.train_generator), ascii=" #")
             loop.set_description(f'Epoch: {self.epoch}/{self.final_epoch}')
+            self.optimizer.zero_grad()
             for index in loop:
                 imgs, targets, loss_targets = self.train_generator.__getitem__(index)
                 step_loss = self.train_step(imgs, targets, loss_targets)
                 losses += step_loss
-                avg_loss = losses/(index+1)
-                loop.set_postfix(loss=avg_loss)
-                # log message
-                # if self.step % print_freq == 0:
-                #     #self.epsilon *= 0.95
-                #     avg_loss = losses / print_freq
-                #     # print(epoch_stats.format(
-                #     #     self.epoch, self.step, len(self.train_generator),
-                #     #     100 * self.step / len(self.train_generator),
-                #     #     avg_loss
-                #     # ))
-                #     losses = 0.0
+                if index % self.print_freq == self.print_freq - 1:
+                    self.optimizer.step()
+                    avg_loss = losses/(self.step+1)
+                    loop.set_postfix(loss=avg_loss)
+                    self.optimizer.zero_grad()
+                    self.step += 1
+                    
             self.train_generator.on_epoch_end()
             # calc val
             val_loss = self.validate()
-            # self.lr_schedule.step(val_loss)
+            if self.lr_scheduler is not None:
+                self.lr_scheduler.step(val_loss)
 
             self.save_model('ckpt-{}-{:.4f}.pt'.format(self.epoch, val_loss))
             self.epoch += 1
@@ -95,23 +92,24 @@ class Trainer():
 
         if avg_loss < self.best_val_loss:
             print('val loss improved from {:.4f} to {:.4f}'.format(self.best_val_loss, avg_loss))
-            #self.epsilon = self.epsilon*0.95
+            self.epsilon = self.epsilon*0.95
             self.best_val_loss = avg_loss
             self.save_model('best_ckpt.pt')
         return avg_loss
     def train_step(self, imgs, targets, loss_targets):
-        self.optimizer.zero_grad()
+        #self.optimizer.zero_grad()
         imgs = imgs.to(self.device)
         targets = targets.to(self.device)
         loss_targets = loss_targets.to(self.device)
         logits = self.model(imgs, targets, self.epsilon)
 
         # calculate the loss
-        loss = self.loss_fn(loss_targets, logits)
+        loss = self.loss_fn(loss_targets, logits)/self.print_freq
         loss.backward()
-        self.step += 1
+        #self.step += 1
         self.total_step += 1
-        self.optimizer.step()
+        #self.optimizer.step()
+
 
         return loss.item()
 
@@ -119,7 +117,7 @@ class Trainer():
         imgs = imgs.to(self.device)
         targets = targets.to(self.device)
         loss_target = loss_target.to(self.device)
-        logits = self.model(imgs, targets, self.epsilon)
+        logits = self.model(imgs, targets, -1)
 
         # calculate loss
         loss = self.loss_fn(loss_target, logits)

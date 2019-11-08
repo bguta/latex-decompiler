@@ -32,7 +32,7 @@ class im2latex(nn.Module):
                 dropout=0.3,
                 encoder_lstm_units=256,
                 decoder_lstm_units=512,
-                embedding_size=512):
+                embedding_size=64):
         super(im2latex, self).__init__()
         self.name = 'im2latex'
         self.encoder_lstm_units = encoder_lstm_units
@@ -42,7 +42,7 @@ class im2latex(nn.Module):
 
         # encoder
         self.cnn_encoder = nn.Sequential(
-            nn.Conv2d(3, 64, 3, 1, 1),
+            nn.Conv2d(1, 64, 3, 1, 1),
             #nn.BatchNorm2d(num_features=64),
             nn.ReLU(),
             nn.MaxPool2d(2, 2, 0),

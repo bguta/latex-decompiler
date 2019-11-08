@@ -71,8 +71,10 @@ class create_data:
         full_len = len(formulas)
 
         dataset = {'image_name': [], 'latex_equations': []}
-        with click.progressbar(range(50000)) as bar:
+        with click.progressbar(range(40000)) as bar:
             for i in bar:
+                if len(formulas[i].split(' ')) > 200:
+                    continue
                 try:
                     im_name = str(uuid.uuid4().hex) + '.png'
                     self.latex_to_img(f"{formulas[i]}", f'{self.__output_dir}/' + im_name, self.__image_size)

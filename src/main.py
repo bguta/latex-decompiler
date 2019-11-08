@@ -8,13 +8,14 @@ from model.model import im2latex
 from model.trainer import Trainer
 from model.metrics import loss_fn
 from data.generator import generator
+from data.create_data import create_data
 from torch.utils.data import DataLoader
 
 def create_dataset():
-    creator = create_data(image_size=(32, 416), 
+    creator = create_data(image_size=(128, 416), 
                 output_csv='data/dataset.csv', 
-                output_dir='data/images', 
-                formula_file='data/formulas.txt')
+                output_dir='data/images',
+                formula_file='data/normalized_.txt')
     creator.create()
 
 def create_vocabset():
@@ -37,13 +38,13 @@ def train():
     IMAGE_DIR = DATA_DIR + 'images/'
     DATASET = 'dataset.csv'
     MODEL_DIR = DATA_DIR + 'saved_model'
-    VOCAB = 'vocab_8k.txt'
-    BATCH_SIZE = 8
+    VOCAB = 'vocab.txt'
+    BATCH_SIZE = 3
     EPOCHS = 10
     START_EPOCH = 0
-    IMAGE_DIM = (32, 416)
-    load_saved_model = True
-    max_equation_length = 232 + 2
+    IMAGE_DIM = (128, 416)
+    load_saved_model = False
+    max_equation_length = 200 + 2
 
     # import the equations + image names and the tokens
     dataset = pd.read_csv(DATA_DIR+DATASET)
@@ -63,10 +64,9 @@ def train():
                 eq_dim=max_equation_length,
                 batch_size=BATCH_SIZE,
                 base_path=IMAGE_DIR,
-                preprocess=preprocess,
                 vocab_list=vocab_tokens,
                 shuffle=True,
-                n_channels=3)
+                n_channels=1)
 
     val_generator = generator(list_IDs=val_idx,
                 df=dataset,
@@ -74,25 +74,25 @@ def train():
                 eq_dim=max_equation_length,
                 batch_size=BATCH_SIZE,
                 base_path=IMAGE_DIR,
-                preprocess=preprocess,
                 vocab_list=vocab_tokens,
                 shuffle=True,
-                n_channels=3)
+                n_channels=1)
     
     # initialize our model
     model = im2latex(vocab_size)
-    optimizer = optim.Adam(model.parameters(), lr=5e-6)
-    lr_schedule = None
+    optimizer = optim.Adam(model.parameters(), lr=4e-3, weight_decay=1e-6)
+    lr_schedule = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.95, patience=1, verbose=True, cooldown=1, min_lr=1e-6)
     epsilon = 1.0
     best_val_loss = np.inf
     if load_saved_model:
-        checkpoint = torch.load(MODEL_DIR + '/ckpt-32-0.6236.pt')
+        checkpoint = torch.load(MODEL_DIR + '/best_ckpt.pt')
         model.load_state_dict(checkpoint['model_state_dict'])
         model.cuda()
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         START_EPOCH = checkpoint['epoch'] + 1
         best_val_loss = checkpoint['best_val_loss']
         epsilon = checkpoint['epsilon']
+        print(f'epsilon val: {epsilon}')
         print('Loaded weights')
 
     trainer = Trainer(optimizer=optimizer,
