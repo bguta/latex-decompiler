@@ -29,8 +29,13 @@ def create_vocabset():
     with open('vocab_.txt', 'w') as f:
         f.write('\n'.join(unique_tokens))
 
-def preprocess(x):
-    return x/255.
+def encode_equation(string, vocab_list, dim, is_for_loss=False):
+    encoding = [vocab_list.index(x) if x in vocab_list else print('ERROR') for x in string.split(' ')]
+    if not is_for_loss:
+        encoding.insert(0, len(vocab_list) - 2) # insert the start token
+    encoding += [len(vocab_list) - 1] # insert the end token
+    encoding += [0]*(dim - len(encoding)) # pad the rest
+    return np.array(encoding)
 
 def train():
     # hyperparameters + files
@@ -39,49 +44,43 @@ def train():
     DATASET = 'dataset.csv'
     MODEL_DIR = DATA_DIR + 'saved_model'
     VOCAB = 'vocab.txt'
-    BATCH_SIZE = 3
+    BATCH_SIZE = 4
     EPOCHS = 10
     START_EPOCH = 0
     IMAGE_DIM = (128, 416)
     load_saved_model = False
     max_equation_length = 200 + 2
 
-    # import the equations + image names and the tokens
-    dataset = pd.read_csv(DATA_DIR+DATASET)
-    #dataset = dataset.head(100)
+
     vocabFile = open(DATA_DIR+VOCAB, 'r', encoding="utf8")
     vocab_tokens = [x.replace('\n', '') for x in vocabFile.readlines()]
     vocabFile.close()
     vocab_size = len(vocab_tokens)
+    # import the equations + image names and the tokens
+    dataset = pd.read_csv(DATA_DIR+DATASET)
+    dataset['Y'] =  dataset['latex_equations'].apply(lambda x: encode_equation(x, vocab_tokens, max_equation_length, False))
+    dataset['Y_loss'] = dataset['latex_equations'].apply(lambda x: encode_equation(x, vocab_tokens, max_equation_length, True))
     train_idx, val_idx = train_test_split(
-        dataset.index, random_state=2312, test_size=0.20
+        dataset.index, random_state=92372, test_size=0.20
     )
 
     # the validation and training data generators
     train_generator = generator(list_IDs=train_idx,
                 df=dataset,
-                dim=IMAGE_DIM,
-                eq_dim=max_equation_length,
-                batch_size=BATCH_SIZE,
                 base_path=IMAGE_DIR,
-                vocab_list=vocab_tokens,
-                shuffle=True,
-                n_channels=1)
+                shuffle=True)
 
     val_generator = generator(list_IDs=val_idx,
                 df=dataset,
-                dim=IMAGE_DIM,
-                eq_dim=max_equation_length,
-                batch_size=BATCH_SIZE,
                 base_path=IMAGE_DIR,
-                vocab_list=vocab_tokens,
-                shuffle=True,
-                n_channels=1)
-    
+                shuffle=True)
+
+    train_generator = DataLoader(train_generator, batch_size=BATCH_SIZE, shuffle=True, num_workers=2, pin_memory=True)
+    val_generator = DataLoader(val_generator, batch_size=BATCH_SIZE, shuffle=True, num_workers=2, pin_memory=True)
     # initialize our model
     model = im2latex(vocab_size)
-    optimizer = optim.Adam(model.parameters(), lr=4e-3, weight_decay=1e-6)
-    lr_schedule = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.95, patience=1, verbose=True, cooldown=1, min_lr=1e-6)
+    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    lr_schedule = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.95, patience=1, verbose=True, cooldown=1, min_lr=1e-7)
     epsilon = 1.0
     best_val_loss = np.inf
     if load_saved_model:
@@ -89,11 +88,14 @@ def train():
         model.load_state_dict(checkpoint['model_state_dict'])
         model.cuda()
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        START_EPOCH = checkpoint['epoch'] + 1
+        START_EPOCH = checkpoint['epoch']
         best_val_loss = checkpoint['best_val_loss']
         epsilon = checkpoint['epsilon']
-        print(f'epsilon val: {epsilon}')
         print('Loaded weights')
+    print(f'epsilon val: {epsilon}')
+    print(f'best_val_loss: {best_val_loss}')
+    print(f'model summary: {model}')
+    input()
 
     trainer = Trainer(optimizer=optimizer,
                     loss_fn=loss_fn,

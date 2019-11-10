@@ -29,10 +29,10 @@ class im2latex(nn.Module):
 
     def __init__(self,
                 vocab_size,
-                dropout=0.3,
+                dropout=0.2,
                 encoder_lstm_units=256,
                 decoder_lstm_units=512,
-                embedding_size=64):
+                embedding_size=32):
         super(im2latex, self).__init__()
         self.name = 'im2latex'
         self.encoder_lstm_units = encoder_lstm_units
@@ -42,25 +42,25 @@ class im2latex(nn.Module):
 
         # encoder
         self.cnn_encoder = nn.Sequential(
-            nn.Conv2d(1, 64, 3, 1, 1),
+            nn.Conv2d(1, 32, 3, 1),
             #nn.BatchNorm2d(num_features=64),
             nn.ReLU(),
             nn.MaxPool2d(2, 2, 0),
 
-            nn.Conv2d(64, 128, 3, 1, 1),
+            nn.Conv2d(32, 64, 3, 1),
             #nn.BatchNorm2d(num_features=128),
             nn.ReLU(),
             nn.MaxPool2d((1,2), (1,2), 0), # nn.MaxPool2d(2, 2, 1),
 
-            nn.Conv2d(128, 256, 3, 1, 1),
-            nn.BatchNorm2d(num_features=256),
+            nn.Conv2d(64, 128, 3, 1),
+            #nn.BatchNorm2d(num_features=256),
             nn.ReLU(),
-            nn.Conv2d(256, 256, 3, 1, 1),
+            nn.Conv2d(128, 128, 3, 1),
             #nn.BatchNorm2d(num_features=256),
             nn.ReLU(),
             nn.MaxPool2d((2,1), (2,1), 0),
 
-            nn.Conv2d(256, self.encoder_lstm_units, 3, 1, 0),
+            nn.Conv2d(128, self.encoder_lstm_units, 3, 1, 0),
             #nn.BatchNorm2d(num_features=self.encoder_lstm_units),
             nn.ReLU()
         )
@@ -155,7 +155,7 @@ class im2latex(nn.Module):
         logit = F.softmax(self.W_out(output_t), dim=1)  # [B, out_size]
 
         return (h_t, c_t), output_t, logit, attn_scores
-
+    
     def forward(self, imgs, formulas, epsilon=1.):
         """args:
         imgs: [B, C, H, W]
@@ -176,11 +176,11 @@ class im2latex(nn.Module):
             target = formulas[:, t:t+1]
             # schedule sampling
             if logits and self.uniform.sample().item() > epsilon:
-                target = torch.argmax(torch.log(logits[-1]), dim=1, keepdim=True)
+                target = torch.argmax(logits[-1], dim=1, keepdim=True)
             # ont step decoding
             dec_states, o_t, logit, attn_scores = self.step_decoding(
                 dec_states, o_t, encoded_imgs, target)
             logits.append(logit)
-            attention.append(attn_scores)
+            #attention.append(attn_scores)
         logits = torch.stack(logits, dim=1)  # [B, MAX_LEN, out_size]
         return logits #, attention

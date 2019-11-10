@@ -20,8 +20,11 @@ def decode(token_ids, vocab_list):
     return decoded_string.strip()
 
 def decode_equation(encoding, vocab_list):
-    token_ids = np.argmax(np.log(encoding), axis=-1)
-    return decode(token_ids, vocab_list)
+    enc_arr = encoding.squeeze().detach().numpy()
+    if len(enc_arr.shape) > 1:
+        token_ids = np.argmax(np.log(enc_arr), axis=-1)
+        return decode(token_ids, vocab_list)
+    return decode(enc_arr, vocab_list)
 
 def beam_search_decoder(data, k):
     sequences = [[ [], 1.0 ]]
@@ -58,17 +61,21 @@ def preprocess_tex(tex):
 def show_tex(tex):
     preview(f'${tex}$', viewer='file', filename='output.png', euler=False)
 
+def encode_equation(string, vocab_list, dim, is_for_loss=False):
+    encoding = [vocab_list.index(x) if x in vocab_list else print("ERROR") for x in string.split(' ')]
+    if not is_for_loss:
+        encoding.insert(0, len(vocab_list) - 2) # insert the start token
+    encoding += [len(vocab_list) - 1] # insert the end token
+    encoding += [0]*(dim - len(encoding)) # pad the rest
+    return np.array(encoding)
+
 # hyperparameters + files
 DATA_DIR = 'data/'
 IMAGE_DIR = DATA_DIR + 'images/'
 DATASET = 'dataset.csv'
 MODEL_DIR = DATA_DIR + 'saved_model/'
 VOCAB = 'vocab.txt'
-BATCH_SIZE = 1
-EPOCHS = 1
-START_EPOCH = 0
-IMAGE_DIM = (128, 416)
-load_saved_model = True
+load_saved_model = False
 max_equation_length = 200 + 2
 
 
@@ -78,30 +85,22 @@ vocabFile = open(DATA_DIR+VOCAB, 'r', encoding="utf8")
 vocab_tokens = [x.replace('\n', '') for x in vocabFile.readlines()]
 vocabFile.close()
 vocab_size = len(vocab_tokens)
+dataset['Y'] =  dataset['latex_equations'].apply(lambda x: encode_equation(x, vocab_tokens, max_equation_length, False))
+dataset['Y_loss'] = dataset['latex_equations'].apply(lambda x: encode_equation(x, vocab_tokens, max_equation_length, True))
 train_idx, val_idx = train_test_split(
-    dataset.index, random_state=2312, test_size=0.20
+    dataset.index, random_state=92372, test_size=0.20
 )
 
 # the validation and training data generators
 train_generator = generator(list_IDs=train_idx,
             df=dataset,
-            dim=IMAGE_DIM,
-            eq_dim=max_equation_length,
-            batch_size=BATCH_SIZE,
             base_path=IMAGE_DIR,
-            vocab_list=vocab_tokens,
-            shuffle=True,
-            n_channels=1)
+            shuffle=True)
 
 val_generator = generator(list_IDs=val_idx,
             df=dataset,
-            dim=IMAGE_DIM,
-            eq_dim=max_equation_length,
-            batch_size=BATCH_SIZE,
             base_path=IMAGE_DIR,
-            vocab_list=vocab_tokens,
-            shuffle=True,
-            n_channels=1)
+            shuffle=True)
 
 # the model
 model = im2latex(vocab_size)
