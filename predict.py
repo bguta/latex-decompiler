@@ -21,33 +21,44 @@ def cal_shape(w, h, ratio=13, height_padding=16):
 
     ## Throws asserion error if the padding for the width is negative
     '''
-    if abs(w/h - ratio) < 0.5:
+    if abs(w/h - ratio) < 0.1:
         return 0, 0
     pad_h = height_padding
-    pad_w = ratio*pad_h + ratio*h - w
+    pad_w = int(ratio*(pad_h + h) - w)
     assert pad_w >= 0, 'The padding for the width was too small, please provide an image with a smaller aspect ratio'
-    return pad_w, pad_h
+    return pad_w//2, pad_h//2
 
-def load_img(im_path, im_size=(128,416)):
+def load_img(im_path, im_size=(128,416), re=[17/32, 18/32, 19/32]):
     '''
     Open the *.png image specified in the im_path and prepocess it
     for our model
 
     ## Args
     im_path:    the path to the .png file
-    im_size:    the size required by our model. default (32,416)
+    im_size:    the size required by our model. default (128,416)
 
-    ## Returns the processed image as a torch tensor
+    ## Returns an array of processed image as a torch tensor
     '''
-    img = ImageOps.invert(Image.open(im_path).convert('RGB'))
-    pad_dim = cal_shape(*img.size, ratio=im_size[1]//im_size[0], height_padding=1)
-    print(f'Padding dimension: {pad_dim}')
+    imgs = []
+    img = ImageOps.invert(Image.open(im_path).convert('L'))
+    print(img.getbbox())
+
+    pad_dim = cal_shape(*img.size, ratio=im_size[1]/im_size[0], height_padding=128)
     processed_img = tv.pad(img, pad_dim)
-    processed_img = tv.resize(processed_img, im_size)
-    processed_img = tv.to_tensor(processed_img)
-    plt.imshow(processed_img.detach().numpy().transpose(1,2,0))
-    plt.show()
-    return processed_img.unsqueeze(0)
+    if pad_dim[0] != 0 or pad_dim[1] != 0:
+        for re_ in re:
+            re_size = (int(im_size[0]*re_), int(im_size[1]*re_))
+            pr_im = tv.resize(processed_img, re_size)
+            pd_h = (im_size[0] - re_size[0])//2
+            pd_w = (im_size[1] - re_size[1])//2
+            imgs.append(tv.pad(pr_im, (pd_w, pd_h)))
+    else:
+        processed_img = tv.resize(processed_img, im_size)
+        imgs.append(processed_img)
+    
+    imgs = [tv.to_tensor(x).unsqueeze(0) for x in imgs]
+    [(plt.imshow(x.squeeze().detach().numpy()), plt.show()) for x in imgs]
+    return imgs
 
 def decode(prediction, vocab_list):
     pr = np.squeeze(prediction.detach().numpy())
@@ -60,25 +71,32 @@ def decode(prediction, vocab_list):
     return processed_tex
 
 def prompt():
-    return input("Please enter the path to the image: ")
+    return input("Please enter the path to the image (enter q to exit): ")
 
 def main(model, start_token, vocab_set):
-    # parser = argparse.ArgumentParser(description="Latex Decompiler application")
-    # parser.add_argument('--img_path', required=True,
-    #                     help='path to the stored weights of the model')
-    # args = parser.parse_args()
     print("~~ Latex Decompiler application ~~ \n            est. 2019\n")
     while True:
         im_path = prompt()
-        img = load_img(im_path)
-        encoded_pr = model(img, start_token, 0.0)
-        predicted_latex = decode(encoded_pr, vocab_set)
-        print(f'Prediction: {predicted_latex}')
+        if im_path.lower().strip() == "q":
+            print('Exiting')
+            break
+        try:
+            imgs = load_img(im_path)
+            pred = []
+            for img in imgs:
+                encoded_pr = model(img, start_token, -1)
+                pred.append(decode(encoded_pr, vocab_set))
+            for index, predicted_latex in enumerate(pred):
+                print('')
+                print(f'Prediction #{index}: {predicted_latex}')
+        except AssertionError as e:
+            print('Failed to convert image to an input ... please try again')
+            pass
         print('')
 
 if __name__ == '__main__':
-    stored_model = torch.load('pre_trained/model.pt')
-    max_len = 232 + 2
+    stored_model = torch.load('pre_trained/ckpt-33-0.9793.pt')
+    max_len = 200 + 2
 
     vocabFile = open('pre_trained/vocab.txt', 'r', encoding="utf8")
     vocab_tokens = [x.replace('\n', '') for x in vocabFile.readlines()]

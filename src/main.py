@@ -44,7 +44,7 @@ def train():
     DATASET = 'dataset.csv'
     MODEL_DIR = DATA_DIR + 'saved_model'
     VOCAB = 'vocab.txt'
-    BATCH_SIZE = 4
+    BATCH_SIZE = 16
     EPOCHS = 10
     START_EPOCH = 0
     IMAGE_DIM = (128, 416)
@@ -90,7 +90,7 @@ def train():
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         START_EPOCH = checkpoint['epoch']
         best_val_loss = checkpoint['best_val_loss']
-        epsilon = checkpoint['epsilon']
+        #epsilon = checkpoint['epsilon']
         print('Loaded weights')
     print(f'epsilon val: {epsilon}')
     print(f'best_val_loss: {best_val_loss}')

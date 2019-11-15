@@ -43,13 +43,14 @@ def beam_search_decoder(data, k):
         sequences = ordered[:k]
     return sequences
 
-def plot_att(img, atts, predicted, reshape=(6, 102)):
+def plot_att(img, atts, predicted, reshape=(12, 48)):
+    im = img.squeeze().detach().numpy()
     for index, att in enumerate(atts):
         #print(f'{predicted[index]}')
         plt.axis('off')
-        im_plt = plt.imshow(np.squeeze(img))
+        im_plt = plt.imshow(im)
         plt.axis('off')
-        plt.imshow(np.resize(np.squeeze(att.detach().numpy()), reshape), cmap='gray', alpha=0.6, extent=im_plt.get_extent())
+        plt.imshow(np.resize(att.squeeze().detach().numpy(), reshape), cmap='gray', alpha=0.6, extent=im_plt.get_extent())
         plt.title(f'Predicted {predicted[index]}')
         plt.show()
 
@@ -104,8 +105,11 @@ val_generator = generator(list_IDs=val_idx,
 
 # the model
 model = im2latex(vocab_size)
+epsilon = 1.0
 if load_saved_model:
     print('Loading weights')
-    checkpoint = torch.load(MODEL_DIR + 'best_ckpt.pt')
+    checkpoint = torch.load(MODEL_DIR + 'ckpt-33-0.9793.pt')
     model.load_state_dict(checkpoint['model_state_dict'])
+    epsilon = checkpoint['epsilon']
+print(f'Epsilon val: {epsilon}')
 model.eval()

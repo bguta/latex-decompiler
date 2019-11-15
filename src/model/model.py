@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import init
 from torch.distributions.uniform import Uniform
+import numpy as np
 
 class im2latex(nn.Module):
     r""" Create the image to latex converter model.
@@ -31,8 +32,8 @@ class im2latex(nn.Module):
                 vocab_size,
                 dropout=0.2,
                 encoder_lstm_units=256,
-                decoder_lstm_units=512,
-                embedding_size=32):
+                decoder_lstm_units=256,
+                embedding_size=64):
         super(im2latex, self).__init__()
         self.name = 'im2latex'
         self.encoder_lstm_units = encoder_lstm_units
@@ -50,15 +51,17 @@ class im2latex(nn.Module):
             nn.Conv2d(32, 64, 3, 1),
             #nn.BatchNorm2d(num_features=128),
             nn.ReLU(),
-            nn.MaxPool2d((1,2), (1,2), 0), # nn.MaxPool2d(2, 2, 1),
+            nn.MaxPool2d(2, 2, 0),
 
             nn.Conv2d(64, 128, 3, 1),
             #nn.BatchNorm2d(num_features=256),
             nn.ReLU(),
-            nn.Conv2d(128, 128, 3, 1),
-            #nn.BatchNorm2d(num_features=256),
-            nn.ReLU(),
-            nn.MaxPool2d((2,1), (2,1), 0),
+            nn.MaxPool2d(2, 2, 0),
+
+            # nn.Conv2d(128, 256, 3, 1),
+            # #nn.BatchNorm2d(num_features=256),
+            # nn.ReLU(),
+            # nn.MaxPool2d(2, 2, 0),
 
             nn.Conv2d(128, self.encoder_lstm_units, 3, 1, 0),
             #nn.BatchNorm2d(num_features=self.encoder_lstm_units),
@@ -90,7 +93,45 @@ class im2latex(nn.Module):
         encoded_imgs = encoded_imgs.permute(0, 2, 3, 1)  # [Batchs, H', W', encoder_units]
         B, H, W, _ = encoded_imgs.shape
         encoded_imgs = encoded_imgs.contiguous().view(B, H*W, -1) # [Batchs, H' x W', encoder_units]
+        if True:
+            encoded_imgs = self.add_pos_enc(encoded_imgs)
         return encoded_imgs
+    
+    def add_pos_enc(self, tensor, min_t=1, max_t=1e4):
+        """
+        Implements the frequency-based positional encoding described
+        in `Attention is all you Need
+        Parameters
+        ----------
+        tensor : ``torch.Tensor``
+            a Tensor with shape (batch_size, timesteps, hidden_dim).
+        min_timescale : ``float``, optional (default = 1.0)
+            The largest timescale to use.
+        Returns
+        -------
+        The input tensor augmented with the sinusoidal frequencies.
+        """
+
+        _, t_steps, hidden_dim = tensor.size()
+        tst_range = torch.arange(0, t_steps, dtype=torch.long, device=tensor.device).data.float() # (t_steps)
+        # half for both sin and cos
+        n_tsc = hidden_dim//2
+        tsc_range = torch.arange(0, n_tsc, dtype=torch.long, device=tensor.device).data.float() # (n_tsc)
+
+        log_tsc_inc = np.log(max_t / min_t) / (n_tsc - 1) 
+        inv_tsc = min_t * torch.exp(tsc_range * -log_tsc_inc) # (n_tsc)
+
+        scaled_time = tst_range.unsqueeze(1) * inv_tsc.unsqueeze(0) #(t_steps, n_tsc)
+        sinusoids = torch.randn(scaled_time.size(0), 2*scaled_time.size(1), device=tensor.device) # (t_steps, 2 * n_tsc)
+        sinusoids[:, ::2] = torch.sin(scaled_time) # even steps
+        sinusoids[:, 1::2] = torch.cos(scaled_time) # odd steps
+        if hidden_dim % 2 != 0:
+            # if the number of dimensions is odd, the cos and sin
+            # timescales had size (hidden_dim - 1) / 2, so we need
+            # to add a row of zeros to make up the difference.
+            sinusoids = torch.cat([sinusoids, sinusoids.new_zeros(timesteps, 1)], 1)
+
+        return tensor + sinusoids.unsqueeze(0)
         
     def init_decoder(self, enc_out):
         """args:
@@ -171,6 +212,7 @@ class im2latex(nn.Module):
         dec_states, o_t = self.init_decoder(encoded_imgs)
         max_len = formulas.size(1)
         logits = []
+        append_output = logits.append
         attention = []
         for t in range(max_len):
             target = formulas[:, t:t+1]
@@ -180,7 +222,7 @@ class im2latex(nn.Module):
             # ont step decoding
             dec_states, o_t, logit, attn_scores = self.step_decoding(
                 dec_states, o_t, encoded_imgs, target)
-            logits.append(logit)
+            append_output(logit)
             #attention.append(attn_scores)
         logits = torch.stack(logits, dim=1)  # [B, MAX_LEN, out_size]
         return logits #, attention

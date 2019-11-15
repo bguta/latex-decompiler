@@ -45,19 +45,15 @@ class Trainer():
         self.print_freq = 1
     
     def train(self):
-        #epoch_stats = "Epoch {}, step: {}/{} {:.2f}%, Loss: {:.4f}"
         print('Starting to Train')
 
         while self.epoch <= self.final_epoch:
             self.model.train()
             losses = 0.0
-            #with click.progressbar(range(len(self.train_generator)), label=f'Epoch: {self.epoch}/{self.final_epoch}') as bar:
-            #loop = trange(len(self.train_generator), ascii=" #")
             loop = tqdm(self.train_generator, ascii=" #")
             loop.set_description(f'Epoch: {self.epoch}/{self.final_epoch}')
             self.optimizer.zero_grad()
             for index, data in enumerate(loop):
-                #imgs, targets, loss_targets = self.train_generator.__getitem__(index)
                 step_loss = self.train_step(*data)
                 losses += step_loss
                 if index % self.print_freq == self.print_freq - 1:
@@ -67,13 +63,11 @@ class Trainer():
                     self.optimizer.zero_grad()
                     self.step += 1
                     
-            #self.train_generator.on_epoch_end()
-            # calc val
             val_loss = self.validate()
             if self.lr_scheduler is not None:
                 self.lr_scheduler.step(val_loss)
 
-            #self.save_model('ckpt-{}-{:.4f}.pt'.format(self.epoch, val_loss))
+            self.save_model('ckpt-{}-{:.4f}.pt'.format(self.epoch, val_loss))
             self.epoch += 1
             self.step = 0
         return
@@ -85,12 +79,10 @@ class Trainer():
         # run the prediction with no grad acumulation
         with torch.no_grad():
             vloop = tqdm(self.val_generator, ascii=" #")
-            for imgs, target, loss_target in vloop:
-                #imgs, target, loss_target = self.val_generator.__getitem__(index)
-                step_loss = self.val_step(imgs, target, loss_target)
+            for index, data in enumerate(vloop):
+                step_loss = self.val_step(*data)
                 val_total_loss += step_loss
-                vloop.set_postfix(loss=step_loss)
-            #self.val_generator.on_epoch_end()
+                vloop.set_postfix(loss=val_total_loss/(index+1))
             avg_loss = val_total_loss / len(self.val_generator)
             print(epoch_stats.format(self.epoch, avg_loss))
 
@@ -101,7 +93,6 @@ class Trainer():
             self.save_model('best_ckpt.pt')
         return avg_loss
     def train_step(self, imgs, targets, loss_targets):
-        #self.optimizer.zero_grad()
         imgs = imgs.to(self.device, non_blocking=True)
         targets = targets.to(self.device, non_blocking=True)
         loss_targets = loss_targets.to(self.device, non_blocking=True)
@@ -110,10 +101,6 @@ class Trainer():
         # calculate the loss
         loss = self.loss_fn(loss_targets, logits)/self.print_freq
         loss.backward()
-        #self.step += 1
-        #self.total_step += 1
-        #self.optimizer.step()
-
 
         return loss.item()
 
@@ -121,7 +108,7 @@ class Trainer():
         imgs = imgs.to(self.device, non_blocking=True)
         targets = targets.to(self.device, non_blocking=True)
         loss_target = loss_target.to(self.device, non_blocking=True)
-        logits = self.model(imgs, targets, 0.0)
+        logits = self.model(imgs, targets, self.epsilon)
 
         # calculate loss
         loss = self.loss_fn(loss_target, logits)
