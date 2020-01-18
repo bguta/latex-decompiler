@@ -1,3 +1,4 @@
+<!--  -->
 # Latex Decompiler
 
 A Neural Network to convert images of compiled latex equations into their corrseponding latex code.
